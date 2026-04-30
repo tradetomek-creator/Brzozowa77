@@ -9,7 +9,9 @@
 <title>Brzozowa 77 — Zarządzanie Najmem</title>
 <link rel="manifest" href="manifest.json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
 :root {
   --primary: #1B4F72;
@@ -190,6 +192,13 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="nav-tab" data-page="settlements">Rozliczenia</div>
       <div class="nav-tab" data-page="payments">Płatności</div>
       <div class="nav-tab" data-page="settings">Ustawienia</div>
+    </div>
+    <div id="auth-section" style="display:flex;align-items:center;gap:8px;padding:8px 0;">
+      <button id="auth-btn" onclick="handleAuth()" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:0.82em;white-space:nowrap;">
+        Zaloguj się
+      </button>
+      <div id="auth-status" style="font-size:0.75em;color:rgba(255,255,255,0.6);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+      <div id="sync-indicator" style="display:none;font-size:0.7em;padding:2px 8px;border-radius:10px;background:#27ae60;color:#fff;">Sync</div>
     </div>
   </div>
 </nav>
@@ -670,8 +679,178 @@ function loadData() {
   try { const r=localStorage.getItem(DB_KEY); if(!r) return structuredClone(DEFAULT_DATA); return {...structuredClone(DEFAULT_DATA),...JSON.parse(r)}; }
   catch(e){ return structuredClone(DEFAULT_DATA); }
 }
-function saveData(d){ localStorage.setItem(DB_KEY, JSON.stringify(d)); }
+function saveData(d){
+  localStorage.setItem(DB_KEY, JSON.stringify(d));
+  // If logged in, sync to Firestore
+  if(firebaseUser && db){
+    syncToFirestore(d);
+  }
+}
 let DATA = loadData();
+
+// ═══════════════════════════════════════════════════════════════
+// FIREBASE — SYNC & AUTH
+// ═══════════════════════════════════════════════════════════════
+const firebaseConfig={
+  apiKey:"AIzaSyD8qEwuLCCXftMnCxrGOA8TdyL3UQg6Ow",
+  authDomain:"brzozowa77-b3b9f.firebaseapp.com",
+  projectId:"brzozowa77-b3b9f",
+  storageBucket:"brzozowa77-b3b9f.firebasestorage.app",
+  messagingSenderId:"914090092448",
+  appId:"1:914090092448:web:06709f8029ced86da626c5",
+  measurementId:"G-7K89Q3P82G"
+};
+
+let firebaseUser=null, db=null, syncTimeout=null, isSyncingFromCloud=false;
+
+try{
+  firebase.initializeApp(firebaseConfig);
+  db=firebase.firestore();
+  // Enable offline persistence
+  db.enablePersistence({synchronizeTabs:true}).catch(err=>{
+    console.warn('Firestore persistence:',err.code);
+  });
+}catch(e){console.warn('Firebase init error:',e);}
+
+function handleAuth(){
+  if(firebaseUser){
+    // Logout
+    if(!confirm('Wylogować się? Dane lokalne zostaną zachowane.')) return;
+    firebase.auth().signOut();
+  } else {
+    // Login with Google
+    const provider=new firebase.auth.GoogleAuthProvider();
+    firebase.auth().signInWithPopup(provider).catch(err=>{
+      if(err.code==='auth/popup-closed-by-user') return;
+      toast('Błąd logowania: '+err.message,'error');
+    });
+  }
+}
+
+// Auth state listener
+firebase.auth().onAuthStateChanged(user=>{
+  firebaseUser=user;
+  const btn=document.getElementById('auth-btn');
+  const status=document.getElementById('auth-status');
+  const syncInd=document.getElementById('sync-indicator');
+
+  if(user){
+    btn.textContent='Wyloguj';
+    const name=user.displayName||user.email;
+    status.textContent=name;
+    status.title=user.email;
+    syncInd.style.display='inline-block';
+    // Load data from Firestore
+    loadFromFirestore();
+  } else {
+    btn.textContent='Zaloguj się';
+    status.textContent='';
+    syncInd.style.display='none';
+  }
+});
+
+async function loadFromFirestore(){
+  if(!firebaseUser||!db) return;
+  try{
+    const doc=await db.collection('users').doc(firebaseUser.uid).get();
+    if(doc.exists){
+      const cloudData=doc.data().appData;
+      if(cloudData){
+        isSyncingFromCloud=true;
+        // Merge: cloud data wins, but keep local contract PDFs (too big for Firestore)
+        const localContracts={};
+        DATA.tenants.forEach(t=>{if(t.contractPdf) localContracts[t.id]=t.contractPdf;});
+
+        DATA={...structuredClone(DEFAULT_DATA),...cloudData};
+        // Restore contract PDFs from local
+        DATA.tenants.forEach(t=>{
+          if(!t.contractPdf && localContracts[t.id]) t.contractPdf=localContracts[t.id];
+        });
+
+        localStorage.setItem(DB_KEY, JSON.stringify(DATA));
+        toast('Dane zsynchronizowane z chmury','success');
+        // Refresh current page
+        const activePage=document.querySelector('.nav-tab.active');
+        if(activePage) refresh(activePage.dataset.page);
+        isSyncingFromCloud=false;
+      }
+    } else {
+      // First time — upload local data to cloud
+      syncToFirestore(DATA);
+      toast('Dane przesłane do chmury','success');
+    }
+  }catch(e){
+    console.error('Firestore load error:',e);
+    toast('Błąd ładowania z chmury — używam danych lokalnych','error');
+    isSyncingFromCloud=false;
+  }
+}
+
+function syncToFirestore(d){
+  if(!firebaseUser||!db||isSyncingFromCloud) return;
+  // Debounce — save max every 2 seconds
+  clearTimeout(syncTimeout);
+  syncTimeout=setTimeout(async()=>{
+    try{
+      // Strip contract PDFs (base64, too large for Firestore 1MB doc limit)
+      const dataToSync=JSON.parse(JSON.stringify(d));
+      dataToSync.tenants.forEach(t=>{delete t.contractPdf;});
+      // Also strip OCR thumbnails
+      if(dataToSync.ocrResults) dataToSync.ocrResults.forEach(r=>{delete r.thumb;});
+
+      await db.collection('users').doc(firebaseUser.uid).set({
+        appData:dataToSync,
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+        email:firebaseUser.email
+      },{merge:true});
+
+      const ind=document.getElementById('sync-indicator');
+      ind.textContent='Sync ✓';ind.style.background='#27ae60';
+      setTimeout(()=>{ind.textContent='Sync';},2000);
+    }catch(e){
+      console.error('Firestore save error:',e);
+      const ind=document.getElementById('sync-indicator');
+      ind.textContent='Sync ✗';ind.style.background='#e74c3c';
+    }
+  },2000);
+}
+
+// Listen for real-time changes from other devices
+if(db){
+  firebase.auth().onAuthStateChanged(user=>{
+    if(user){
+      db.collection('users').doc(user.uid).onSnapshot(doc=>{
+        if(!doc.exists||isSyncingFromCloud) return;
+        const cloudData=doc.data()?.appData;
+        if(!cloudData) return;
+        // Check if cloud data is newer (compare updatedAt or just always merge)
+        const cloudStr=JSON.stringify(cloudData);
+        const localCopy=JSON.parse(JSON.stringify(DATA));
+        localCopy.tenants.forEach(t=>{delete t.contractPdf;});
+        if(localCopy.ocrResults) localCopy.ocrResults.forEach(r=>{delete r.thumb;});
+        if(JSON.stringify(localCopy)===cloudStr) return; // No change
+
+        isSyncingFromCloud=true;
+        const localContracts={};
+        DATA.tenants.forEach(t=>{if(t.contractPdf) localContracts[t.id]=t.contractPdf;});
+
+        DATA={...structuredClone(DEFAULT_DATA),...cloudData};
+        DATA.tenants.forEach(t=>{
+          if(!t.contractPdf && localContracts[t.id]) t.contractPdf=localContracts[t.id];
+        });
+        localStorage.setItem(DB_KEY, JSON.stringify(DATA));
+
+        const activePage=document.querySelector('.nav-tab.active');
+        if(activePage) refresh(activePage.dataset.page);
+
+        const ind=document.getElementById('sync-indicator');
+        ind.textContent='Sync ↓';ind.style.background='#2e86c1';
+        setTimeout(()=>{ind.textContent='Sync';ind.style.background='#27ae60';},2000);
+        isSyncingFromCloud=false;
+      });
+    }
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
