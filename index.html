@@ -1,0 +1,2086 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1B4F72">
+<title>Brzozowa 77 — Zarządzanie Najmem</title>
+<link rel="manifest" href="manifest.json">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root {
+  --primary: #1B4F72;
+  --primary-light: #2E86C1;
+  --primary-bg: #EBF5FB;
+  --accent: #27AE60;
+  --danger: #E74C3C;
+  --warning: #F39C12;
+  --text: #2C3E50;
+  --text-light: #7F8C8D;
+  --bg: #F8F9FA;
+  --card: #FFFFFF;
+  --border: #DEE2E6;
+  --radius: 12px;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-lg: 0 4px 20px rgba(0,0,0,0.12);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height:100vh; }
+
+/* NAV */
+.nav { background: var(--primary); color:#fff; padding:0; position:sticky; top:0; z-index:100; box-shadow: var(--shadow-lg); }
+.nav-inner { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; padding:0 20px; }
+.nav-brand { font-size:1.2em; font-weight:700; padding:16px 0; display:flex; align-items:center; gap:10px; cursor:pointer; }
+.nav-brand svg { width:28px; height:28px; }
+.nav-tabs { display:flex; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.nav-tab { padding:16px 14px; cursor:pointer; font-size:0.85em; font-weight:500; border-bottom:3px solid transparent; transition:all .2s; white-space:nowrap; color:rgba(255,255,255,0.7); }
+.nav-tab:hover { color:#fff; background:rgba(255,255,255,0.1); }
+.nav-tab.active { color:#fff; border-bottom-color:#fff; background:rgba(255,255,255,0.1); }
+
+/* MAIN */
+.main { max-width:1400px; margin:0 auto; padding:20px; }
+.page { display:none; }
+.page.active { display:block; }
+
+/* CARDS */
+.card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:24px; margin-bottom:20px; }
+.card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
+.card-title { font-size:1.1em; font-weight:700; color:var(--primary); }
+
+/* GRID */
+.grid-2 { display:grid; grid-template-columns: repeat(auto-fill, minmax(340px,1fr)); gap:16px; }
+.grid-4 { display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap:16px; }
+
+/* APARTMENT TILES */
+.apt-tile { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; cursor:pointer; transition:all .2s; border-left:4px solid var(--primary); }
+.apt-tile:hover { transform:translateY(-2px); box-shadow:var(--shadow-lg); }
+.apt-tile.vacant { border-left-color:var(--text-light); opacity:0.6; }
+.apt-tile.overdue { border-left-color:var(--danger); }
+.apt-tile-num { font-size:1.8em; font-weight:800; color:var(--primary); }
+.apt-tile-tenant { font-size:0.95em; color:var(--text); margin:4px 0; }
+.apt-tile-meta { font-size:0.8em; color:var(--text-light); display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
+.apt-tile-badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:0.75em; font-weight:600; }
+.badge-ok { background:#D5F5E3; color:#1E8449; }
+.badge-warn { background:#FEF9E7; color:#B7950B; }
+.badge-danger { background:#FADBD8; color:#C0392B; }
+.badge-neutral { background:#EAECEE; color:#5D6D7E; }
+
+/* STATS ROW */
+.stats-row { display:grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap:16px; margin-bottom:24px; }
+.stat-card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; text-align:center; }
+.stat-value { font-size:1.8em; font-weight:800; color:var(--primary); }
+.stat-label { font-size:0.85em; color:var(--text-light); margin-top:4px; }
+
+/* BUTTONS */
+.btn { padding:10px 20px; border-radius:8px; border:none; cursor:pointer; font-size:0.9em; font-weight:600; transition:all .2s; display:inline-flex; align-items:center; gap:6px; }
+.btn-primary { background:var(--primary); color:#fff; }
+.btn-primary:hover { background:var(--primary-light); }
+.btn-success { background:var(--accent); color:#fff; }
+.btn-success:hover { background:#229954; }
+.btn-danger { background:var(--danger); color:#fff; }
+.btn-danger:hover { background:#C0392B; }
+.btn-warning { background:var(--warning); color:#fff; }
+.btn-outline { background:transparent; border:2px solid var(--primary); color:var(--primary); }
+.btn-outline:hover { background:var(--primary); color:#fff; }
+.btn-sm { padding:6px 14px; font-size:0.82em; }
+.btn-block { width:100%; justify-content:center; }
+.btn:disabled { opacity:0.5; cursor:not-allowed; }
+
+/* TABLE */
+.table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+table { width:100%; border-collapse:collapse; font-size:0.9em; }
+th { background:var(--primary); color:#fff; padding:12px 14px; text-align:left; font-weight:600; white-space:nowrap; }
+td { padding:10px 14px; border-bottom:1px solid var(--border); }
+tr:hover td { background:var(--primary-bg); }
+tr:nth-child(even) td { background:#FAFBFC; }
+tr:nth-child(even):hover td { background:var(--primary-bg); }
+
+/* FORMS */
+.form-group { margin-bottom:16px; }
+.form-label { display:block; font-size:0.85em; font-weight:600; margin-bottom:6px; color:var(--text); }
+.form-input { width:100%; padding:10px 14px; border:2px solid var(--border); border-radius:8px; font-size:0.95em; transition:border-color .2s; background:#fff; }
+.form-input:focus { border-color:var(--primary-light); outline:none; }
+select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237F8C8D' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; padding-right:36px; }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media(max-width:600px){ .form-row{grid-template-columns:1fr;} }
+
+/* MODAL */
+.modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:200; align-items:center; justify-content:center; padding:20px; }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow-lg); width:100%; max-width:600px; max-height:90vh; overflow-y:auto; }
+.modal-header { padding:20px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.modal-title { font-size:1.15em; font-weight:700; color:var(--primary); }
+.modal-close { background:none; border:none; font-size:1.5em; cursor:pointer; color:var(--text-light); padding:0 4px; }
+.modal-body { padding:24px; }
+.modal-footer { padding:16px 24px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px; }
+
+/* TOAST */
+.toast-container { position:fixed; top:80px; right:20px; z-index:300; display:flex; flex-direction:column; gap:8px; }
+.toast { padding:14px 20px; border-radius:8px; color:#fff; font-size:0.9em; font-weight:500; box-shadow:var(--shadow-lg); animation:slideIn .3s ease; min-width:280px; max-width:400px; }
+.toast-success { background:var(--accent); }
+.toast-error { background:var(--danger); }
+.toast-info { background:var(--primary); }
+@keyframes slideIn { from{transform:translateX(100%);opacity:0;} to{transform:translateX(0);opacity:1;} }
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .nav-inner { flex-direction:column; align-items:stretch; }
+  .nav-brand { justify-content:center; padding:12px 0 0; }
+  .nav-tabs { justify-content:flex-start; }
+  .nav-tab { padding:12px 10px; font-size:0.78em; }
+  .main { padding:12px; }
+  .grid-2 { grid-template-columns:1fr; }
+  .stats-row { grid-template-columns: repeat(2,1fr); }
+}
+
+.section-title { font-size:1.3em; font-weight:700; color:var(--primary); margin-bottom:20px; display:flex; align-items:center; gap:10px; }
+.section-title svg { width:24px; height:24px; }
+
+.filters-row { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+.filter-input { padding:8px 14px; border:2px solid var(--border); border-radius:8px; font-size:0.9em; }
+
+/* DROPZONE */
+.dropzone { border:3px dashed var(--border); border-radius:var(--radius); padding:40px 20px; text-align:center; color:var(--text-light); cursor:pointer; transition:all .2s; background:#FAFBFC; }
+.dropzone:hover, .dropzone.dragover { border-color:var(--primary-light); background:var(--primary-bg); color:var(--primary); }
+.dropzone svg { width:48px; height:48px; margin-bottom:12px; opacity:0.5; }
+.dropzone p { font-size:1em; margin-bottom:4px; }
+.dropzone small { font-size:0.8em; }
+
+/* OCR RESULTS */
+.ocr-result-card { background:var(--card); border:2px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+.ocr-result-card.matched { border-color:var(--accent); }
+.ocr-result-card.unmatched { border-color:var(--warning); }
+.ocr-result-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.ocr-thumb { width:80px; height:80px; object-fit:cover; border-radius:8px; cursor:pointer; }
+.ocr-value { font-size:1.4em; font-weight:800; color:var(--primary); }
+
+/* METER ASSIGNMENT TABLE */
+.meter-assign-table input { width:100%; padding:8px; border:2px solid var(--border); border-radius:6px; font-size:0.9em; font-family:monospace; }
+.meter-assign-table input:focus { border-color:var(--primary-light); outline:none; }
+.meter-assign-table td { padding:6px 8px; }
+
+/* PROGRESS */
+.progress-bar { width:100%; height:8px; background:var(--border); border-radius:4px; overflow:hidden; margin:12px 0; }
+.progress-fill { height:100%; background:var(--primary-light); border-radius:4px; transition:width .3s; }
+
+/* GOOGLE DRIVE */
+.gdrive-status { display:flex; align-items:center; gap:8px; padding:12px 16px; border-radius:8px; font-size:0.9em; }
+.gdrive-connected { background:#D5F5E3; color:#1E8449; }
+.gdrive-disconnected { background:#FADBD8; color:#C0392B; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="nav-brand" onclick="switchPage('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
+      Brzozowa 77
+    </div>
+    <div class="nav-tabs">
+      <div class="nav-tab active" data-page="dashboard">Dashboard</div>
+      <div class="nav-tab" data-page="tenants">Najemcy</div>
+      <div class="nav-tab" data-page="meters">Liczniki</div>
+      <div class="nav-tab" data-page="ocr">OCR Zdjęcia</div>
+      <div class="nav-tab" data-page="readings">Odczyty</div>
+      <div class="nav-tab" data-page="invoices">Faktury</div>
+      <div class="nav-tab" data-page="settlements">Rozliczenia</div>
+      <div class="nav-tab" data-page="payments">Płatności</div>
+      <div class="nav-tab" data-page="settings">Ustawienia</div>
+    </div>
+  </div>
+</nav>
+
+<div class="toast-container" id="toasts"></div>
+
+<div class="main">
+
+  <!-- ══════════ DASHBOARD ══════════ -->
+  <div class="page active" id="page-dashboard">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </div>
+    <div class="stats-row" id="dashboard-stats"></div>
+    <div class="grid-2" id="dashboard-tiles"></div>
+  </div>
+
+  <!-- ══════════ NAJEMCY ══════════ -->
+  <div class="page" id="page-tenants">
+    <div class="card-header">
+      <div class="section-title" style="margin-bottom:0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Najemcy
+      </div>
+      <button class="btn btn-primary" onclick="openTenantModal()">+ Dodaj najemcę</button>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table><thead><tr><th>Mieszkanie</th><th>Najemca (osoba 1)</th><th>Osoby</th><th>E-mail</th><th>Telefon</th><th>Osoba 2</th><th>Czynsz</th><th>Umowa do</th><th>Umowa PDF</th><th>Akcje</th></tr></thead>
+        <tbody id="tenants-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ LICZNIKI ══════════ -->
+  <div class="page" id="page-meters">
+    <div class="card-header">
+      <div class="section-title" style="margin-bottom:0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        Liczniki — Zestawienie
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="openMeterModal()">+ Dodaj pojedynczo</button>
+        <button class="btn btn-success" onclick="saveAllMeters()">Zapisz zestawienie</button>
+      </div>
+    </div>
+
+    <!-- ZESTAWIENIE DO WPISU NUMEROW LICZNIKOW + STANY POCZATKOWE -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:8px">Zestawienie liczników — numery seryjne + stany początkowe</div>
+      <p style="color:var(--text-light);font-size:0.85em;margin-bottom:4px;">Dla każdego mieszkania wpisz <strong>nr seryjny</strong> licznika oraz <strong>stan początkowy</strong> (aktualny odczyt z którego zaczyna się rozliczanie).</p>
+      <p style="color:var(--text-light);font-size:0.85em;margin-bottom:16px;">Np. jeśli 1 kwietnia spisałeś licznik zimnej wody i było 152,80 m³ — wpisz tę wartość. Gdy 1 maja zrobisz zdjęcie z odczytem 160,30 m³, system policzy zużycie: 160,30 - 152,80 = 7,50 m³.</p>
+      <div class="table-wrap">
+        <table class="meter-assign-table">
+          <thead>
+            <tr>
+              <th style="width:70px" rowspan="2">Mieszkanie</th>
+              <th colspan="2" style="text-align:center;border-bottom:2px solid rgba(255,255,255,0.3)">💧 Zimna woda</th>
+              <th colspan="2" style="text-align:center;border-bottom:2px solid rgba(255,255,255,0.3)">🔥 Ciepła woda</th>
+              <th colspan="2" style="text-align:center;border-bottom:2px solid rgba(255,255,255,0.3)">🌡️ Ogrzewanie</th>
+              <th colspan="2" style="text-align:center;border-bottom:2px solid rgba(255,255,255,0.3)">⚡ Energia</th>
+            </tr>
+            <tr>
+              <th style="font-weight:400;font-size:0.85em">Nr seryjny</th><th style="font-weight:400;font-size:0.85em">Stan (m³)</th>
+              <th style="font-weight:400;font-size:0.85em">Nr seryjny</th><th style="font-weight:400;font-size:0.85em">Stan (m³)</th>
+              <th style="font-weight:400;font-size:0.85em">Nr seryjny</th><th style="font-weight:400;font-size:0.85em">Stan (GJ)</th>
+              <th style="font-weight:400;font-size:0.85em">Nr seryjny</th><th style="font-weight:400;font-size:0.85em">Stan (kWh)</th>
+            </tr>
+          </thead>
+          <tbody id="meter-assign-tbody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+        <label class="form-label" style="margin:0;">Data stanu początkowego:</label>
+        <input type="date" class="form-input" id="initial-reading-date" style="width:180px;" value="">
+      </div>
+    </div>
+
+    <!-- LISTA ZAPISANYCH LICZNIKOW -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px">Zapisane liczniki</div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Mieszkanie</th><th>Typ medium</th><th>Nr seryjny</th><th>Jednostka</th><th>Ostatni odczyt</th><th>Legalizacja do</th><th>Akcje</th></tr></thead>
+        <tbody id="meters-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ OCR ZDJECIA ══════════ -->
+  <div class="page" id="page-ocr">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      OCR — Odczyt liczników ze zdjęć
+    </div>
+
+    <!-- Google Drive panel -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Google Drive — pobierz zdjęcia z folderu</div>
+        <div id="gdrive-status-indicator"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Klucz API Google Cloud Vision</label>
+          <input type="password" class="form-input" id="gcv-api-key" placeholder="AIza...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Folder Google Drive (ID lub nazwa)</label>
+          <input type="text" class="form-input" id="gdrive-folder" placeholder="np. Brzozowa77/Kwiecien2026">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="connectGoogleDrive()">Połącz z Google Drive</button>
+        <button class="btn btn-outline" onclick="fetchFromGDrive()" id="btn-fetch-gdrive" disabled>Pobierz zdjęcia z folderu</button>
+        <button class="btn btn-outline" onclick="saveOCRSettings()">Zapisz klucz API</button>
+      </div>
+    </div>
+
+    <!-- Upload manualny -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px">Lub: wrzuć zdjęcia ręcznie (drag & drop)</div>
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        <p>Przeciągnij zdjęcia liczników tutaj</p>
+        <small>lub kliknij aby wybrać pliki (JPG, PNG)</small>
+      </div>
+      <input type="file" id="file-input" multiple accept="image/*" style="display:none" onchange="handleFileSelect(event)">
+    </div>
+
+    <!-- Wyniki OCR -->
+    <div class="card" id="ocr-results-card" style="display:none">
+      <div class="card-header">
+        <div class="card-title">Wyniki rozpoznawania OCR</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-success" onclick="applyAllOCR()">Zastosuj wszystkie odczyty</button>
+          <button class="btn btn-outline" onclick="clearOCR()">Wyczyść</button>
+        </div>
+      </div>
+      <div class="progress-bar" id="ocr-progress" style="display:none"><div class="progress-fill" id="ocr-progress-fill"></div></div>
+      <p id="ocr-status" style="font-size:0.85em;color:var(--text-light);margin-bottom:16px;"></p>
+      <div id="ocr-results"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ ODCZYTY ══════════ -->
+  <div class="page" id="page-readings">
+    <div class="card-header">
+      <div class="section-title" style="margin-bottom:0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Odczyty liczników
+      </div>
+      <button class="btn btn-primary" onclick="openReadingModal()">+ Ręczny odczyt</button>
+    </div>
+    <div class="filters-row">
+      <select class="filter-input" id="reading-month-filter" onchange="renderReadings()"></select>
+      <select class="filter-input" id="reading-apt-filter" onchange="renderReadings()"><option value="">Wszystkie mieszkania</option></select>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table><thead><tr><th>Data</th><th>Mieszkanie</th><th>Medium</th><th>Nr licznika</th><th>Odczyt poprz.</th><th>Odczyt akt.</th><th>Zużycie</th><th>Koszt</th><th>Źródło</th><th>Akcje</th></tr></thead>
+        <tbody id="readings-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ FAKTURY ══════════ -->
+  <div class="page" id="page-invoices">
+    <div class="card-header">
+      <div class="section-title" style="margin-bottom:0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Faktury
+      </div>
+      <button class="btn btn-primary" onclick="generateMonthlyInvoices()">Generuj faktury za miesiąc</button>
+    </div>
+    <div class="filters-row">
+      <select class="filter-input" id="invoice-month-filter" onchange="renderInvoices()"></select>
+      <select class="filter-input" id="invoice-type-filter" onchange="renderInvoices()">
+        <option value="">Wszystkie typy</option><option value="czynsz">Czynsz</option><option value="media">Media</option>
+      </select>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table><thead><tr><th>Nr faktury</th><th>Data</th><th>Najemca</th><th>Mieszkanie</th><th>Typ</th><th>Kwota netto</th><th>Kwota brutto</th><th>Status</th><th>Akcje</th></tr></thead>
+        <tbody id="invoices-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ PŁATNOŚCI ══════════ -->
+  <!-- ══════════ ROZLICZENIA MIESIĘCZNE ══════════ -->
+  <div class="page" id="page-settlements">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Rozliczenia miesięczne
+    </div>
+
+    <!-- GENEROWANIE -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Generuj rozliczenie</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Miesiąc rozliczeniowy</label>
+          <input type="month" class="form-input" id="settle-month">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mieszkanie</label>
+          <select class="form-input" id="settle-apt">
+            <option value="all">Wszystkie (8 lokali)</option>
+            <option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option>
+            <option value="5">M5</option><option value="6">M6</option><option value="7">M7</option><option value="8">M8</option>
+          </select>
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;">
+          <button class="btn btn-primary" onclick="generateSettlement()">Generuj rozliczenie</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PODGLĄD WYGENEROWANEGO -->
+    <div class="card" id="settle-preview-card" style="display:none">
+      <div class="card-header">
+        <div class="card-title" id="settle-preview-title">Podgląd rozliczenia</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-accent" onclick="saveSettlement()">Zatwierdź i zapisz</button>
+          <button class="btn btn-outline" onclick="document.getElementById('settle-preview-card').style.display='none'">Anuluj</button>
+        </div>
+      </div>
+      <div id="settle-preview-body"></div>
+    </div>
+
+    <!-- HISTORIA -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Historia rozliczeń</div>
+        <div class="form-row" style="margin-bottom:0;gap:8px;">
+          <select class="form-input" id="settle-hist-apt" onchange="renderSettlementHistory()" style="width:auto;">
+            <option value="all">Wszystkie lokale</option>
+            <option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option>
+            <option value="5">M5</option><option value="6">M6</option><option value="7">M7</option><option value="8">M8</option>
+          </select>
+          <select class="form-input" id="settle-hist-year" onchange="renderSettlementHistory()" style="width:auto;"></select>
+        </div>
+      </div>
+      <div id="settle-history"></div>
+    </div>
+  </div>
+
+  <!-- SETTLEMENT DETAIL MODAL -->
+  <div class="modal-overlay" id="settle-detail-modal">
+    <div class="modal" style="max-width:800px">
+      <div class="modal-header">
+        <div class="modal-title" id="settle-detail-title">Rozliczenie</div>
+        <button class="modal-close" onclick="closeModal('settle-detail-modal')">&times;</button>
+      </div>
+      <div class="modal-body" id="settle-detail-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('settle-detail-modal')">Zamknij</button>
+        <button class="btn btn-danger" onclick="deleteSettlement()" style="margin-right:auto;">Usuń</button>
+        <button class="btn btn-primary" onclick="exportSettlementPDF()">Pobierz PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" id="page-payments">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Monitor płatności
+    </div>
+    <div class="stats-row" id="payment-stats"></div>
+    <div class="card">
+      <div class="table-wrap">
+        <table><thead><tr><th>Nr faktury</th><th>Najemca</th><th>Typ</th><th>Kwota</th><th>Termin</th><th>Dni do/po</th><th>Status</th><th>Akcje</th></tr></thead>
+        <tbody id="payments-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ USTAWIENIA ══════════ -->
+  <div class="page" id="page-settings">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Ustawienia
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">Stawki mediów</div>
+        <div class="form-group"><label class="form-label">Zimna woda (zł/m³)</label><input type="number" step="0.01" class="form-input" id="rate-cold-water" value="12.50"></div>
+        <div class="form-group"><label class="form-label">Ciepła woda (zł/m³)</label><input type="number" step="0.01" class="form-input" id="rate-hot-water" value="28.00"></div>
+        <div class="form-group"><label class="form-label">Ogrzewanie (zł/GJ)</label><input type="number" step="0.01" class="form-input" id="rate-heating" value="85.00"></div>
+        <div class="form-group"><label class="form-label">Energia elektryczna (zł/kWh)</label><input type="number" step="0.01" class="form-input" id="rate-electricity" value="1.05"></div>
+        <div class="form-group"><label class="form-label">Wywóz śmieci (zł/osobę/mies.)</label><input type="number" step="0.01" class="form-input" id="rate-garbage" value="35.00"></div>
+        <div class="form-group"><label class="form-label">Stawka VAT (%)</label><input type="number" step="1" class="form-input" id="rate-vat" value="23"></div>
+        <button class="btn btn-primary btn-block" onclick="saveRates()">Zapisz stawki</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">Dane właściciela / firmy</div>
+        <div class="form-group"><label class="form-label">Nazwa firmy</label><input type="text" class="form-input" id="owner-company" value="EVENTUS sp. z o.o."></div>
+        <div class="form-group"><label class="form-label">Imię i nazwisko</label><input type="text" class="form-input" id="owner-name" value="Tomasz Słomski"></div>
+        <div class="form-group"><label class="form-label">NIP</label><input type="text" class="form-input" id="owner-nip"></div>
+        <div class="form-group"><label class="form-label">Adres</label><input type="text" class="form-input" id="owner-address" value="Aleja Brzozowa 77, 89-600 Chojnice"></div>
+        <div class="form-group"><label class="form-label">E-mail</label><input type="email" class="form-input" id="owner-email" value="tradetomek@gmail.com"></div>
+        <div class="form-group"><label class="form-label">Telefon</label><input type="tel" class="form-input" id="owner-phone"></div>
+        <div class="form-group"><label class="form-label">Nr konta (czynsz)</label><input type="text" class="form-input" id="owner-bank1"></div>
+        <div class="form-group"><label class="form-label">Nr konta (media)</label><input type="text" class="form-input" id="owner-bank2"></div>
+        <button class="btn btn-primary btn-block" onclick="saveOwner()">Zapisz dane</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-title" style="margin-bottom:16px">Zarządzanie danymi</div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <button class="btn btn-outline" onclick="exportData()">Eksportuj dane (JSON)</button>
+        <button class="btn btn-outline" onclick="document.getElementById('import-file').click()">Importuj dane (JSON)</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+        <button class="btn btn-danger" onclick="confirmReset()">Resetuj wszystkie dane</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODALS ═══════ -->
+
+<!-- TENANT MODAL -->
+<div class="modal-overlay" id="tenant-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="tenant-modal-title">Dodaj najemcę</div>
+      <button class="modal-close" onclick="closeModal('tenant-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="tenant-id">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Mieszkanie nr</label><select class="form-input" id="tenant-apt"></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Imię i nazwisko</label><input type="text" class="form-input" id="tenant-name" placeholder="Jan Kowalski"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">E-mail</label><input type="email" class="form-input" id="tenant-email"></div>
+        <div class="form-group"><label class="form-label">Telefon</label><input type="tel" class="form-input" id="tenant-phone"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Czynsz netto (zł)</label><input type="number" step="0.01" class="form-input" id="tenant-rent" value="2000"></div>
+        <div class="form-group"><label class="form-label">NIP (opcjonalnie)</label><input type="text" class="form-input" id="tenant-nip"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Umowa od</label><input type="date" class="form-input" id="tenant-from"></div>
+        <div class="form-group"><label class="form-label">Umowa do</label><input type="date" class="form-input" id="tenant-to"></div>
+      </div>
+
+      <!-- UPLOAD UMOWY PDF -->
+      <div style="margin-top:8px;padding:16px;background:#f8f9fa;border-radius:8px;">
+        <div class="form-label" style="margin-bottom:8px">Umowa najmu (PDF)</div>
+        <div id="tenant-contract-preview" style="margin-bottom:8px;display:none;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:1.4em">📄</span>
+            <span id="tenant-contract-name" style="font-size:0.9em;font-weight:600;"></span>
+            <button class="btn btn-sm btn-outline" onclick="viewContract()">Podgląd</button>
+            <button class="btn btn-sm btn-outline" onclick="downloadContract()">Pobierz</button>
+            <button class="btn btn-sm btn-danger" onclick="removeContract()">Usuń</button>
+          </div>
+        </div>
+        <input type="file" id="tenant-contract-file" accept=".pdf" style="display:none" onchange="handleContractUpload(event)">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('tenant-contract-file').click()" id="tenant-contract-btn">Wgraj PDF umowy</button>
+      </div>
+
+      <!-- DODATKOWE OSOBY (max 3, razem z główną = max 4) -->
+      <div style="margin-top:16px;padding:16px;background:#f0f7ee;border-radius:8px;border:1px solid #d4edda;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div class="form-label" style="margin-bottom:0">Dodatkowe osoby w lokalu <span style="font-size:0.85em;color:var(--text-light)">(max 3 dodatkowe, łącznie max 4 osoby)</span></div>
+          <div id="tenant-persons-count" style="font-size:0.85em;font-weight:600;color:var(--primary);">Osób: 1</div>
+        </div>
+        <div id="extra-persons-container"></div>
+        <button class="btn btn-outline btn-sm" id="add-person-btn" onclick="addExtraPerson()" style="margin-top:8px;">+ Dodaj osobę</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('tenant-modal')">Anuluj</button>
+      <button class="btn btn-primary" onclick="saveTenant()">Zapisz</button>
+    </div>
+  </div>
+</div>
+
+<!-- METER MODAL -->
+<div class="modal-overlay" id="meter-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="meter-modal-title">Dodaj licznik</div>
+      <button class="modal-close" onclick="closeModal('meter-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="meter-id">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Mieszkanie nr</label><select class="form-input" id="meter-apt"></select></div>
+        <div class="form-group"><label class="form-label">Typ medium</label>
+          <select class="form-input" id="meter-type"><option value="cold_water">Zimna woda</option><option value="hot_water">Ciepła woda</option><option value="heating">Ogrzewanie</option><option value="electricity">Energia elektryczna</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nr seryjny</label><input type="text" class="form-input" id="meter-serial" placeholder="np. ZW-001-2024"></div>
+        <div class="form-group"><label class="form-label">Legalizacja ważna do</label><input type="date" class="form-input" id="meter-valid"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('meter-modal')">Anuluj</button>
+      <button class="btn btn-primary" onclick="saveMeter()">Zapisz</button>
+    </div>
+  </div>
+</div>
+
+<!-- READING MODAL -->
+<div class="modal-overlay" id="reading-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Nowy odczyt ręczny</div>
+      <button class="modal-close" onclick="closeModal('reading-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Mieszkanie</label><select class="form-input" id="reading-apt" onchange="loadMetersForReading()"></select></div>
+        <div class="form-group"><label class="form-label">Data odczytu</label><input type="date" class="form-input" id="reading-date"></div>
+      </div>
+      <div id="reading-meters-form"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('reading-modal')">Anuluj</button>
+      <button class="btn btn-primary" onclick="saveReading()">Zapisz odczyty</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVOICE DETAIL MODAL -->
+<div class="modal-overlay" id="invoice-detail-modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <div class="modal-title" id="invoice-detail-title">Faktura</div>
+      <button class="modal-close" onclick="closeModal('invoice-detail-modal')">&times;</button>
+    </div>
+    <div class="modal-body" id="invoice-detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('invoice-detail-modal')">Zamknij</button>
+      <button class="btn btn-primary" id="invoice-pdf-btn">Pobierz PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMAGE PREVIEW MODAL -->
+<div class="modal-overlay" id="image-modal" onclick="closeModal('image-modal')">
+  <div class="modal" style="max-width:90vw;max-height:90vh;padding:0;overflow:hidden;background:transparent;box-shadow:none;" onclick="event.stopPropagation()">
+    <img id="image-modal-img" style="width:100%;height:auto;max-height:90vh;object-fit:contain;border-radius:var(--radius);">
+  </div>
+</div>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DATA STORE
+// ═══════════════════════════════════════════════════════════════
+const DB_KEY = 'brzozowa77_data';
+const DEFAULT_DATA = {
+  apartments: [1,2,3,4,5,6,7,8].map(n => ({ id: n, number: n })),
+  tenants: [],
+  meters: [],
+  readings: [],
+  invoices: [],
+  rates: { cold_water:12.50, hot_water:28.00, heating:85.00, electricity:1.05, garbage:35.00, vat:23 },
+  owner: { company:'EVENTUS sp. z o.o.', name:'Tomasz Słomski', nip:'', address:'Aleja Brzozowa 77, 89-600 Chojnice', email:'tradetomek@gmail.com', phone:'', bank1:'', bank2:'' },
+  settlements: [],
+  nextInvoiceNum: 1,
+  gcvApiKey: '',
+  ocrResults: []
+};
+
+function loadData() {
+  try { const r=localStorage.getItem(DB_KEY); if(!r) return structuredClone(DEFAULT_DATA); return {...structuredClone(DEFAULT_DATA),...JSON.parse(r)}; }
+  catch(e){ return structuredClone(DEFAULT_DATA); }
+}
+function saveData(d){ localStorage.setItem(DB_KEY, JSON.stringify(d)); }
+let DATA = loadData();
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+const ML = { cold_water:'Zimna woda', hot_water:'Ciepła woda', heating:'Ogrzewanie', electricity:'Energia' };
+const MU = { cold_water:'m³', hot_water:'m³', heating:'GJ', electricity:'kWh' };
+const MI = { cold_water:'💧', hot_water:'🔥', heating:'🌡️', electricity:'⚡' };
+const MTYPES = ['cold_water','hot_water','heating','electricity'];
+
+function fmt(n){ return Number(n).toFixed(2).replace('.',',')+' zł'; }
+function fmtN(n){ return Number(n).toFixed(2).replace('.',','); }
+function genId(){ return Date.now().toString(36)+Math.random().toString(36).substr(2,5); }
+function today(){ return new Date().toISOString().split('T')[0]; }
+function curMonth(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function toast(msg,type='success'){ const e=document.createElement('div'); e.className=`toast toast-${type}`; e.textContent=msg; document.getElementById('toasts').appendChild(e); setTimeout(()=>e.remove(),4000); }
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function getTenant(apt){ return DATA.tenants.find(t=>t.apartment===apt); }
+function getMeters(apt){ return DATA.meters.filter(m=>m.apartment===apt); }
+function lastReading(meterId){ return DATA.readings.filter(r=>r.meterId===meterId).sort((a,b)=>b.date.localeCompare(a.date))[0]||null; }
+function rate(type){ return DATA.rates[type]||0; }
+
+// ═══════════════════════════════════════════════════════════════
+// PDF — POLISH FONT SUPPORT
+// ═══════════════════════════════════════════════════════════════
+let _robotoFontData=null;
+async function createPdfDoc(opts){
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF(opts||{unit:'mm',format:'a4'});
+
+  // Load Roboto font with Polish characters (Latin Extended)
+  if(!_robotoFontData){
+    try{
+      toast('Ładowanie czcionki polskiej...','info');
+      const resp=await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Regular.ttf');
+      if(!resp.ok) throw new Error('Font fetch failed');
+      const buf=await resp.arrayBuffer();
+      _robotoFontData=buf;
+    }catch(e){
+      console.warn('Could not load Roboto font, trying fallback...',e);
+      // Fallback: try another CDN
+      try{
+        const resp2=await fetch('https://cdn.jsdelivr.net/npm/@fontsource/roboto@5.0.8/files/roboto-latin-ext-400-normal.woff');
+        if(resp2.ok) _robotoFontData=await resp2.arrayBuffer();
+      }catch(e2){console.warn('Fallback font also failed',e2);}
+    }
+  }
+
+  if(_robotoFontData){
+    const fontBytes=new Uint8Array(_robotoFontData);
+    // Convert to binary string for jsPDF
+    let binaryStr='';
+    for(let i=0;i<fontBytes.length;i++) binaryStr+=String.fromCharCode(fontBytes[i]);
+    doc.addFileToVFS('Roboto-Regular.ttf',btoa(binaryStr));
+    doc.addFont('Roboto-Regular.ttf','Roboto','normal');
+    doc.setFont('Roboto','normal');
+  }
+
+  return doc;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+function switchPage(page){
+  document.querySelectorAll('.nav-tab').forEach(t=>{ t.classList.toggle('active', t.dataset.page===page); });
+  document.querySelectorAll('.page').forEach(p=>{ p.classList.toggle('active', p.id==='page-'+page); });
+  refresh(page);
+}
+document.querySelectorAll('.nav-tab').forEach(t=>t.addEventListener('click',()=>switchPage(t.dataset.page)));
+
+function refresh(p){
+  switch(p){
+    case 'dashboard': renderDashboard(); break;
+    case 'tenants': renderTenants(); break;
+    case 'meters': renderMeterAssign(); renderMeters(); break;
+    case 'ocr': loadOCRSettings(); break;
+    case 'readings': renderReadings(); break;
+    case 'invoices': renderInvoices(); break;
+    case 'settlements': initSettlements(); break;
+    case 'payments': renderPayments(); break;
+    case 'settings': loadSettings(); break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+function renderDashboard(){
+  const occ=DATA.tenants.length, rent=DATA.tenants.reduce((s,t)=>s+(t.rent||0),0);
+  const ovd=DATA.invoices.filter(i=>i.status==='overdue').length, pnd=DATA.invoices.filter(i=>i.status==='pending').length;
+  document.getElementById('dashboard-stats').innerHTML=`
+    <div class="stat-card"><div class="stat-value">${occ}/8</div><div class="stat-label">Wynajęte</div></div>
+    <div class="stat-card"><div class="stat-value">${fmt(rent)}</div><div class="stat-label">Czynsz/mies.</div></div>
+    <div class="stat-card"><div class="stat-value">${pnd}</div><div class="stat-label">Oczekujące</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:${ovd?'var(--danger)':'var(--accent)'}">${ovd}</div><div class="stat-label">Przeterminowane</div></div>`;
+
+  let h='';
+  for(let i=1;i<=8;i++){
+    const t=getTenant(i), ms=getMeters(i);
+    const ovd2=DATA.invoices.some(inv=>{ const tt=DATA.tenants.find(x=>x.id===inv.tenantId); return tt&&tt.apartment===i&&inv.status==='overdue'; });
+    const cls=!t?'vacant':ovd2?'overdue':'';
+    const lr=ms.length?DATA.readings.filter(r=>ms.some(m=>m.id===r.meterId)).sort((a,b)=>b.date.localeCompare(a.date))[0]:null;
+    h+=`<div class="apt-tile ${cls}" onclick="goToApt(${i})">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="apt-tile-num">M${i}</div>
+        ${!t?'<span class="apt-tile-badge badge-neutral">Wolne</span>':ovd2?'<span class="apt-tile-badge badge-danger">Zaległość</span>':'<span class="apt-tile-badge badge-ok">OK</span>'}
+      </div>
+      <div class="apt-tile-tenant">${t?t.name:'Brak najemcy'}</div>
+      <div class="apt-tile-meta">
+        ${t?`<span>${t.persons} os.</span><span>${fmt(t.rent)}</span>`:''}
+        <span>${ms.length}/4 liczn.</span>
+        ${lr?`<span>Odczyt: ${lr.date}</span>`:''}
+      </div></div>`;
+  }
+  document.getElementById('dashboard-tiles').innerHTML=h;
+}
+function goToApt(n){ getTenant(n)?switchPage('readings'):openTenantModal(null,n); }
+
+// ═══════════════════════════════════════════════════════════════
+// TENANTS
+// ═══════════════════════════════════════════════════════════════
+function renderTenants(){
+  const tb=document.getElementById('tenants-tbody');
+  if(!DATA.tenants.length){ tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-light)">Brak najemców.</td></tr>'; return; }
+  tb.innerHTML=DATA.tenants.map(t=>{
+    const extras=t.extraPersons||[];
+    const allPersons=extras.length?extras.map(p=>`<span title="E-mail: ${p.email||'—'}\nTel: ${p.phone||'—'}" style="cursor:help">${p.name}</span>`).join(', '):(t.person2Name?`<span title="E-mail: ${t.person2Email||'—'}\nTel: ${t.person2Phone||'—'}" style="cursor:help">${t.person2Name}</span>`:'—');
+    const contractBtn=t.contractPdf?`<button class="btn btn-sm btn-outline" onclick="viewTenantContract('${t.id}')">📄 Podgląd</button>`:'<span style="color:var(--text-light)">—</span>';
+    return `<tr>
+    <td><strong>M${t.apartment}</strong></td><td>${t.name}</td><td>${t.persons||1}</td><td>${t.email||'—'}</td><td>${t.phone||'—'}</td><td>${allPersons}</td><td>${fmt(t.rent)}</td><td>${t.contractTo||'—'}</td>
+    <td>${contractBtn}</td>
+    <td><button class="btn btn-sm btn-outline" onclick="editTenant('${t.id}')">Edytuj</button> <button class="btn btn-sm btn-danger" onclick="deleteTenant('${t.id}')">Usuń</button></td>
+  </tr>`;}).join('');
+}
+
+function openTenantModal(id,pre){
+  const sel=document.getElementById('tenant-apt'), occ=DATA.tenants.map(t=>t.apartment);
+  sel.innerHTML=[1,2,3,4,5,6,7,8].map(n=>{
+    const o=occ.includes(n)&&(!id||DATA.tenants.find(t=>t.id===id)?.apartment!==n);
+    return `<option value="${n}" ${o?'disabled':''} ${n===pre?'selected':''}>${n}${o?' (zajęte)':''}</option>`;
+  }).join('');
+  // Reset contract preview and extra persons
+  pendingContractData=null; pendingContractName=null;
+  document.getElementById('tenant-contract-preview').style.display='none';
+  document.getElementById('tenant-contract-btn').style.display='';
+
+  if(id){ const t=DATA.tenants.find(x=>x.id===id); document.getElementById('tenant-modal-title').textContent='Edytuj najemcę';
+    document.getElementById('tenant-id').value=id; document.getElementById('tenant-apt').value=t.apartment;
+    document.getElementById('tenant-name').value=t.name; document.getElementById('tenant-email').value=t.email||'';
+    document.getElementById('tenant-phone').value=t.phone||''; document.getElementById('tenant-rent').value=t.rent;
+    document.getElementById('tenant-nip').value=t.nip||'';
+    document.getElementById('tenant-from').value=t.contractFrom||''; document.getElementById('tenant-to').value=t.contractTo||'';
+    // Contract PDF
+    if(t.contractPdf){
+      pendingContractData=t.contractPdf; pendingContractName=t.contractFileName||'umowa.pdf';
+      document.getElementById('tenant-contract-name').textContent=pendingContractName;
+      document.getElementById('tenant-contract-preview').style.display='block';
+    }
+    // Extra persons (up to 3)
+    clearExtraPersons();
+    const extras=t.extraPersons||[];
+    // Backward compat: migrate old person2 fields
+    if(!extras.length && t.person2Name){
+      extras.push({name:t.person2Name,email:t.person2Email||'',phone:t.person2Phone||''});
+    }
+    extras.forEach(p=>addExtraPerson(p));
+    updatePersonsCount();
+  } else { document.getElementById('tenant-modal-title').textContent='Dodaj najemcę'; document.getElementById('tenant-id').value='';
+    ['tenant-name','tenant-email','tenant-phone','tenant-nip'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('tenant-rent').value='2000';
+    document.getElementById('tenant-from').value=today(); document.getElementById('tenant-to').value='';
+    clearExtraPersons(); updatePersonsCount();
+  }
+  openModal('tenant-modal');
+}
+
+// Contract upload handling
+let pendingContractData=null, pendingContractName=null;
+
+function handleContractUpload(e){
+  const file=e.target.files[0]; if(!file)return;
+  if(file.type!=='application/pdf'){toast('Tylko pliki PDF','error');return;}
+  if(file.size>10*1024*1024){toast('Plik za duży (max 10 MB)','error');return;}
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    pendingContractData=ev.target.result; pendingContractName=file.name;
+    document.getElementById('tenant-contract-name').textContent=file.name;
+    document.getElementById('tenant-contract-preview').style.display='block';
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+function viewContract(){
+  if(!pendingContractData)return;
+  const w=window.open(); w.document.write(`<iframe src="${pendingContractData}" style="width:100%;height:100%;border:none"></iframe>`);
+}
+function downloadContract(){
+  if(!pendingContractData)return;
+  const a=document.createElement('a'); a.href=pendingContractData; a.download=pendingContractName||'umowa.pdf'; a.click();
+}
+function removeContract(){ pendingContractData=null; pendingContractName=null;
+  document.getElementById('tenant-contract-preview').style.display='none';
+}
+function viewTenantContract(tenantId){
+  const t=DATA.tenants.find(x=>x.id===tenantId);
+  if(!t||!t.contractPdf)return;
+  const w=window.open(); w.document.write(`<title>Umowa — M${t.apartment} ${t.name}</title><iframe src="${t.contractPdf}" style="width:100%;height:100%;border:none;position:fixed;top:0;left:0"></iframe>`);
+}
+
+// Extra persons management (max 3 additional = 4 total)
+function clearExtraPersons(){
+  document.getElementById('extra-persons-container').innerHTML='';
+  document.getElementById('add-person-btn').style.display='inline-block';
+}
+
+function addExtraPerson(data){
+  const container=document.getElementById('extra-persons-container');
+  const count=container.querySelectorAll('.extra-person-block').length;
+  if(count>=3){toast('Maksymalnie 3 dodatkowe osoby (4 łącznie)','error');return;}
+
+  const idx=count+2; // Person 2,3,4
+  const div=document.createElement('div');
+  div.className='extra-person-block';
+  div.style.cssText='padding:12px;margin-bottom:8px;background:#fff;border-radius:8px;border:1px solid #d4edda;position:relative;';
+  div.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <strong style="font-size:0.9em;">Osoba ${idx}</strong>
+      <button class="btn btn-sm btn-danger" onclick="removeExtraPerson(this)" type="button" style="padding:2px 8px;font-size:0.8em;">Usuń</button>
+    </div>
+    <div class="form-group" style="margin-bottom:6px;"><input type="text" class="form-input ep-name" placeholder="Imię i nazwisko" value="${data?.name||''}"></div>
+    <div class="form-row" style="gap:8px;">
+      <div class="form-group" style="margin-bottom:0;"><input type="email" class="form-input ep-email" placeholder="E-mail" value="${data?.email||''}"></div>
+      <div class="form-group" style="margin-bottom:0;"><input type="tel" class="form-input ep-phone" placeholder="Telefon" value="${data?.phone||''}"></div>
+    </div>`;
+  container.appendChild(div);
+
+  if(container.querySelectorAll('.extra-person-block').length>=3){
+    document.getElementById('add-person-btn').style.display='none';
+  }
+  updatePersonsCount();
+}
+
+function removeExtraPerson(btn){
+  btn.closest('.extra-person-block').remove();
+  document.getElementById('add-person-btn').style.display='inline-block';
+  // Re-number
+  document.querySelectorAll('.extra-person-block').forEach((el,i)=>{
+    el.querySelector('strong').textContent=`Osoba ${i+2}`;
+  });
+  updatePersonsCount();
+}
+
+function updatePersonsCount(){
+  const count=1+document.querySelectorAll('.extra-person-block').length;
+  document.getElementById('tenant-persons-count').textContent=`Osób: ${count}`;
+}
+
+function getExtraPersons(){
+  const result=[];
+  document.querySelectorAll('.extra-person-block').forEach(el=>{
+    const name=el.querySelector('.ep-name').value.trim();
+    const email=el.querySelector('.ep-email').value.trim();
+    const phone=el.querySelector('.ep-phone').value.trim();
+    if(name) result.push({name,email,phone});
+  });
+  return result;
+}
+
+function saveTenant(){
+  const id=document.getElementById('tenant-id').value;
+  const extraPersons=getExtraPersons();
+  const persons=1+extraPersons.length;
+  const o={id:id||genId(), apartment:+document.getElementById('tenant-apt').value,
+    name:document.getElementById('tenant-name').value.trim(), email:document.getElementById('tenant-email').value.trim(),
+    phone:document.getElementById('tenant-phone').value.trim(), rent:parseFloat(document.getElementById('tenant-rent').value)||0,
+    nip:document.getElementById('tenant-nip').value.trim(), persons:persons,
+    contractFrom:document.getElementById('tenant-from').value, contractTo:document.getElementById('tenant-to').value,
+    contractPdf:pendingContractData||null, contractFileName:pendingContractName||null,
+    extraPersons:extraPersons,
+    // Backward compat
+    person2Name:extraPersons[0]?.name||'', person2Email:extraPersons[0]?.email||'', person2Phone:extraPersons[0]?.phone||''
+  };
+  if(!o.name){toast('Podaj imię i nazwisko','error');return;}
+  if(id){const i=DATA.tenants.findIndex(t=>t.id===id);DATA.tenants[i]=o;toast('Zaktualizowano');}
+  else{DATA.tenants.push(o);toast('Dodano najemcę');}
+  saveData(DATA); closeModal('tenant-modal'); renderTenants(); renderDashboard();
+}
+function editTenant(id){openTenantModal(id);}
+function deleteTenant(id){if(!confirm('Usunąć najemcę?'))return;DATA.tenants=DATA.tenants.filter(t=>t.id!==id);saveData(DATA);renderTenants();renderDashboard();toast('Usunięto');}
+
+// ═══════════════════════════════════════════════════════════════
+// METERS — ZESTAWIENIE ZBIOROWE
+// ═══════════════════════════════════════════════════════════════
+function renderMeterAssign(){
+  const tb=document.getElementById('meter-assign-tbody');
+  // Set default initial reading date if empty
+  const dateInput=document.getElementById('initial-reading-date');
+  if(dateInput&&!dateInput.value){
+    // Default: first day of current month
+    const d=new Date(); dateInput.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+  }
+  let h='';
+  for(let n=1;n<=8;n++){
+    h+=`<tr><td style="text-align:center;font-weight:800;font-size:1.2em;background:var(--primary-bg);vertical-align:middle" rowspan="1">M${n}</td>`;
+    MTYPES.forEach(type=>{
+      const existing=DATA.meters.find(m=>m.apartment===n&&m.type===type);
+      const lr=existing?lastReading(existing.id):null;
+      const initVal=existing?.initialValue;
+      const showVal=lr?lr.value:(initVal??'');
+      h+=`<td><input type="text" data-apt="${n}" data-type="${type}" data-field="serial" value="${existing?existing.serial:''}" placeholder="nr seryjny" style="font-family:monospace"></td>`;
+      h+=`<td><input type="number" step="0.01" data-apt="${n}" data-type="${type}" data-field="initial" value="${showVal}" placeholder="0,00" style="width:90px;text-align:right;${showVal?'background:#d5f5e3':''}"></td>`;
+    });
+    h+='</tr>';
+  }
+  tb.innerHTML=h;
+}
+
+function saveAllMeters(){
+  const serialInputs=document.querySelectorAll('.meter-assign-table input[data-field="serial"]');
+  const initialInputs=document.querySelectorAll('.meter-assign-table input[data-field="initial"]');
+  const initialDate=document.getElementById('initial-reading-date')?.value||today();
+  let countMeters=0, countInitial=0;
+
+  // Process serials
+  serialInputs.forEach(inp=>{
+    const apt=+inp.dataset.apt, type=inp.dataset.type, serial=inp.value.trim();
+    const existing=DATA.meters.find(m=>m.apartment===apt&&m.type===type);
+    if(serial){
+      if(existing){ existing.serial=serial; }
+      else { DATA.meters.push({id:genId(),apartment:apt,type,serial,validUntil:'',initialValue:null}); }
+      countMeters++;
+    } else if(existing&&!serial){
+      DATA.meters=DATA.meters.filter(m=>m.id!==existing.id);
+    }
+  });
+
+  // Process initial values
+  initialInputs.forEach(inp=>{
+    const apt=+inp.dataset.apt, type=inp.dataset.type, val=parseFloat(inp.value);
+    if(isNaN(val))return;
+    const meter=DATA.meters.find(m=>m.apartment===apt&&m.type===type);
+    if(!meter)return;
+
+    // Save initial value on meter
+    meter.initialValue=val;
+
+    // Check if there's already an initial reading for this meter
+    const existingInitial=DATA.readings.find(r=>r.meterId===meter.id&&r.source==='initial');
+    if(existingInitial){
+      // Update existing initial reading
+      existingInitial.value=val;
+      existingInitial.date=initialDate;
+    } else {
+      // Create initial reading (previousValue=0, this is the baseline)
+      DATA.readings.push({
+        id:genId(), meterId:meter.id, date:initialDate,
+        value:val, previousValue:null, source:'initial'
+      });
+    }
+    countInitial++;
+  });
+
+  saveData(DATA); renderMeters(); renderDashboard();
+  toast(`Zapisano ${countMeters} liczników, ${countInitial} stanów początkowych`);
+}
+
+function renderMeters(){
+  const tb=document.getElementById('meters-tbody');
+  if(!DATA.meters.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-light)">Brak zapisanych liczników.</td></tr>';return;}
+  const sorted=[...DATA.meters].sort((a,b)=>a.apartment-b.apartment||MTYPES.indexOf(a.type)-MTYPES.indexOf(b.type));
+  tb.innerHTML=sorted.map(m=>{
+    const lr=lastReading(m.id);
+    const exp=m.validUntil&&new Date(m.validUntil)<new Date();
+    return `<tr><td><strong>M${m.apartment}</strong></td><td>${MI[m.type]} ${ML[m.type]}</td><td><code>${m.serial}</code></td>
+      <td>${MU[m.type]}</td><td>${lr?fmtN(lr.value)+' '+MU[m.type]:'—'}</td>
+      <td>${m.validUntil?`<span style="color:${exp?'var(--danger)':'inherit'}">${m.validUntil}${exp?' ⚠️':''}</span>`:'—'}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="editMeter('${m.id}')">Edytuj</button> <button class="btn btn-sm btn-danger" onclick="deleteMeter('${m.id}')">Usuń</button></td></tr>`;
+  }).join('');
+}
+
+function openMeterModal(id){
+  document.getElementById('meter-apt').innerHTML=[1,2,3,4,5,6,7,8].map(n=>`<option value="${n}">${n}</option>`).join('');
+  if(id){const m=DATA.meters.find(x=>x.id===id);document.getElementById('meter-modal-title').textContent='Edytuj';document.getElementById('meter-id').value=id;
+    document.getElementById('meter-apt').value=m.apartment;document.getElementById('meter-type').value=m.type;
+    document.getElementById('meter-serial').value=m.serial;document.getElementById('meter-valid').value=m.validUntil||'';
+  }else{document.getElementById('meter-modal-title').textContent='Dodaj licznik';document.getElementById('meter-id').value='';document.getElementById('meter-serial').value='';document.getElementById('meter-valid').value='';}
+  openModal('meter-modal');
+}
+function saveMeter(){
+  const id=document.getElementById('meter-id').value;
+  const o={id:id||genId(),apartment:+document.getElementById('meter-apt').value,type:document.getElementById('meter-type').value,
+    serial:document.getElementById('meter-serial').value.trim(),validUntil:document.getElementById('meter-valid').value};
+  if(!o.serial){toast('Podaj nr seryjny','error');return;}
+  if(id){DATA.meters[DATA.meters.findIndex(m=>m.id===id)]=o;toast('Zaktualizowano');}
+  else{DATA.meters.push(o);toast('Dodano licznik');}
+  saveData(DATA);closeModal('meter-modal');renderMeterAssign();renderMeters();
+}
+function editMeter(id){openMeterModal(id);}
+function deleteMeter(id){if(!confirm('Usunąć licznik?'))return;DATA.meters=DATA.meters.filter(m=>m.id!==id);saveData(DATA);renderMeterAssign();renderMeters();toast('Usunięto');}
+
+// ═══════════════════════════════════════════════════════════════
+// OCR — GOOGLE CLOUD VISION + UPLOAD
+// ═══════════════════════════════════════════════════════════════
+let ocrQueue = [];
+let gdriveToken = null;
+
+function loadOCRSettings(){
+  document.getElementById('gcv-api-key').value = DATA.gcvApiKey||'';
+  updateGDriveStatus();
+}
+function saveOCRSettings(){
+  DATA.gcvApiKey = document.getElementById('gcv-api-key').value.trim();
+  saveData(DATA);
+  toast('Klucz API zapisany');
+}
+function updateGDriveStatus(){
+  const el=document.getElementById('gdrive-status-indicator');
+  if(gdriveToken){ el.innerHTML='<div class="gdrive-status gdrive-connected">✓ Połączono z Google Drive</div>';
+    document.getElementById('btn-fetch-gdrive').disabled=false;
+  } else { el.innerHTML='<div class="gdrive-status gdrive-disconnected">✗ Nie połączono</div>';
+    document.getElementById('btn-fetch-gdrive').disabled=true;
+  }
+}
+
+// Google Drive OAuth
+function connectGoogleDrive(){
+  toast('Google Drive wymaga konfiguracji OAuth w Google Cloud Console. Na razie użyj drag & drop do wrzucenia zdjęć.','info');
+  // In production, this would use Google Identity Services:
+  // google.accounts.oauth2.initTokenClient({...}).requestAccessToken();
+}
+
+async function fetchFromGDrive(){
+  if(!gdriveToken){toast('Najpierw połącz się z Google Drive','error');return;}
+  toast('Pobieranie zdjęć z Google Drive...','info');
+  // Production: fetch from Google Drive API with gdriveToken
+}
+
+// Drag & Drop
+const dz=document.getElementById('dropzone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
+
+function handleFileSelect(e){handleFiles(e.target.files);e.target.value='';}
+
+// Compress image before sending to API (iPhone photos can be 5-10MB)
+function compressImage(dataUrl, maxWidth=1600, quality=0.8){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      let w=img.width, h=img.height;
+      if(w>maxWidth){ h=Math.round(h*maxWidth/w); w=maxWidth; }
+      canvas.width=w; canvas.height=h;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,w,h);
+      const compressed=canvas.toDataURL('image/jpeg',quality);
+      resolve({dataUrl:compressed, base64:compressed.split(',')[1]});
+    };
+    img.onerror=()=>resolve({dataUrl,base64:dataUrl.split(',')[1]});
+    img.src=dataUrl;
+  });
+}
+
+function handleFiles(files){
+  const images=[...files].filter(f=>f.type.startsWith('image/'));
+  if(!images.length){toast('Nie znaleziono plików graficznych','error');return;}
+  ocrQueue=[];
+  let loaded=0;
+  toast(`Wczytywanie ${images.length} zdjęć...`,'info');
+  images.forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=async ev=>{
+      // Compress before OCR — reduces 5MB iPhone photo to ~200KB
+      const compressed=await compressImage(ev.target.result);
+      ocrQueue.push({name:f.name, dataUrl:compressed.dataUrl, base64:compressed.base64});
+      loaded++;
+      if(loaded===images.length) processOCR();
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+async function processOCR(){
+  const apiKey=DATA.gcvApiKey||document.getElementById('gcv-api-key').value.trim();
+  if(!apiKey){
+    toast('Brak klucza API Google Cloud Vision. Wpisz klucz w ustawieniach OCR.','error');
+    showManualOCR();
+    return;
+  }
+  DATA.gcvApiKey=apiKey; saveData(DATA);
+
+  const card=document.getElementById('ocr-results-card'); card.style.display='block';
+  const prog=document.getElementById('ocr-progress'); prog.style.display='block';
+  const results=document.getElementById('ocr-results'); results.innerHTML='';
+  const status=document.getElementById('ocr-status');
+
+  DATA.ocrResults=[];
+  for(let i=0;i<ocrQueue.length;i++){
+    const item=ocrQueue[i];
+    const sizeKB=Math.round(item.base64.length*3/4/1024);
+    status.textContent=`Przetwarzanie ${i+1}/${ocrQueue.length}: ${item.name} (${sizeKB} KB)...`;
+    document.getElementById('ocr-progress-fill').style.width=((i+1)/ocrQueue.length*100)+'%';
+
+    try {
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),30000); // 30s timeout
+
+      const resp=await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        signal:controller.signal,
+        body:JSON.stringify({requests:[{image:{content:item.base64},features:[{type:'TEXT_DETECTION',maxResults:10}]}]})
+      });
+      clearTimeout(timeout);
+
+      if(!resp.ok){
+        const errBody=await resp.text();
+        let errMsg=`HTTP ${resp.status}`;
+        try{ const ej=JSON.parse(errBody); errMsg=ej.error?.message||errMsg; }catch(e){}
+        if(resp.status===403) errMsg='Brak dostępu — sprawdź czy Cloud Vision API jest włączone w Google Cloud Console';
+        if(resp.status===400) errMsg='Nieprawidłowe żądanie — sprawdź klucz API';
+        if(resp.status===429) errMsg='Przekroczono limit zapytań — spróbuj za chwilę';
+        throw new Error(errMsg);
+      }
+
+      const data=await resp.json();
+
+      if(data.error){throw new Error(data.error.message);}
+      if(data.responses&&data.responses[0]?.error){throw new Error(data.responses[0].error.message);}
+
+      const texts=data.responses[0]?.textAnnotations;
+      if(!texts||!texts.length){
+        DATA.ocrResults.push({file:item.name,thumb:item.dataUrl,rawText:'',detectedValue:null,detectedSerial:null,matched:false,meterId:null});
+        continue;
+      }
+
+      const fullText=texts[0].description;
+
+      // === PRIORITY 1: Find value with UNIT (kWh, m³, m3, GJ, MWh) ===
+      // This is the most reliable way — the number right before the unit IS the reading
+      const unitPatterns=[
+        /(\d{1,8}[.,]\d{1,3})\s*kWh/gi,
+        /(\d{1,8}[.,]\d{1,3})\s*m[³3]/gi,
+        /(\d{1,8}[.,]\d{1,3})\s*GJ/gi,
+        /(\d{1,8}[.,]\d{1,3})\s*MWh/gi,
+        /(\d{3,8})\s*kWh/gi,
+        /(\d{3,8})\s*m[³3]/gi,
+        /(\d{3,8})\s*GJ/gi,
+        /(\d{3,8})\s*MWh/gi,
+      ];
+      let unitValue=null;
+      for(const pat of unitPatterns){
+        const um=pat.exec(fullText);
+        if(um){
+          unitValue=parseFloat(um[1].replace(',','.'));
+          break;
+        }
+      }
+
+      // === PRIORITY 2: Extract all numbers as fallback ===
+      const numbers=fullText.match(/\d{3,8}[.,]\d{1,3}|\d{4,8}/g)||[];
+      // Try to find meter serial — usually alphanumeric pattern
+      const serials=fullText.match(/[A-Z]{1,3}[-\s]?\d{3,10}[-\s]?\d{0,6}/gi)||[];
+      // Also catch "Nr XXXXX" patterns as serials
+      const nrSerials=fullText.match(/[Nn][Rr]\.?\s*(\d{5,12})/g)||[];
+      nrSerials.forEach(s=>{if(!serials.includes(s)) serials.push(s);});
+
+      // Match serial to known meters
+      let matchedMeter=null;
+      let matchedSerial=null;
+      for(const s of serials){
+        const cleaned=s.replace(/[\s-]/g,'').toUpperCase();
+        const found=DATA.meters.find(m=>m.serial.replace(/[\s-]/g,'').toUpperCase()===cleaned);
+        if(found){matchedMeter=found;matchedSerial=s;break;}
+      }
+
+      // If no serial match, try matching by all serials in the text
+      if(!matchedMeter){
+        for(const m of DATA.meters){
+          if(fullText.toUpperCase().includes(m.serial.toUpperCase())){
+            matchedMeter=m; matchedSerial=m.serial; break;
+          }
+        }
+      }
+
+      // Build list of serial numbers to EXCLUDE from value candidates
+      const serialExclusions=new Set();
+      // Add all known meter serials (digits only)
+      DATA.meters.forEach(m=>{
+        if(m.serial){
+          const digits=m.serial.replace(/\D/g,'');
+          if(digits) serialExclusions.add(digits);
+          // Also add the full serial cleaned
+          serialExclusions.add(m.serial.replace(/[\s-]/g,'').toUpperCase());
+        }
+      });
+      // Add detected serials from OCR text
+      serials.forEach(s=>{
+        const digits=s.replace(/\D/g,'');
+        if(digits) serialExclusions.add(digits);
+      });
+
+      // Pick meter value — PRIORITY: use unitValue if found
+      let detectedValue=null;
+
+      if(unitValue!==null && !isNaN(unitValue)){
+        // === Best case: found number with unit (e.g. "5322,3 kWh") ===
+        detectedValue=unitValue;
+        console.log('OCR: Użyto wartości z jednostką:',detectedValue);
+      } else if(numbers.length){
+        // === Fallback: pick from all numbers, excluding serials ===
+        const candidates=numbers
+          .map(n=>({raw:n, val:parseFloat(n.replace(',','.'))}))
+          .filter(n=>!isNaN(n.val))
+          .filter(n=>{
+            const digits=n.raw.replace(/\D/g,'');
+            for(const excl of serialExclusions){
+              if(excl.includes(digits)||digits.includes(excl)) return false;
+            }
+            return true;
+          })
+          .filter(n=>n.val>=0.001 && n.val<=9999999)
+          .sort((a,b)=>b.val-a.val);
+
+        if(matchedMeter){
+          const lr=lastReading(matchedMeter.id);
+          const valid=candidates.filter(n=>!lr||n.val>=lr.value);
+          detectedValue=valid.length?valid[valid.length-1].val:candidates.length?candidates[candidates.length-1].val:null;
+          if(lr && valid.length>1){
+            valid.sort((a,b)=>Math.abs(a.val-lr.value)-Math.abs(b.val-lr.value));
+            detectedValue=valid[0].val;
+          }
+        } else {
+          detectedValue=candidates.length?candidates[0].val:null;
+        }
+      }
+
+      DATA.ocrResults.push({
+        file:item.name, thumb:item.dataUrl, rawText:fullText,
+        detectedValue, detectedSerial:matchedSerial,
+        matched:!!matchedMeter, meterId:matchedMeter?.id||null,
+        meterApt:matchedMeter?.apartment||null, meterType:matchedMeter?.type||null
+      });
+
+    } catch(err){
+      console.error('OCR error:',err);
+      let userMsg=err.message;
+      if(err.name==='AbortError') userMsg='Przekroczono czas oczekiwania (30s) — sprawdź połączenie internetowe i spróbuj ponownie';
+      if(err.message.includes('Failed to fetch')||err.message.includes('NetworkError')) userMsg='Brak połączenia z serwerem Google — sprawdź internet';
+      DATA.ocrResults.push({file:item.name,thumb:item.dataUrl,rawText:'BŁĄD: '+userMsg,detectedValue:null,detectedSerial:null,matched:false,meterId:null,error:true});
+      toast('Błąd OCR: '+userMsg,'error');
+    }
+  }
+
+  saveData(DATA);
+  const recognized=DATA.ocrResults.filter(r=>r.detectedValue).length;
+  const errors=DATA.ocrResults.filter(r=>r.error).length;
+  if(errors>0){
+    status.textContent=`Zakończono z ${errors} błęd${errors===1?'em':'ami'}. Rozpoznano ${recognized}/${DATA.ocrResults.length} wartości.`;
+    status.style.color='#e74c3c';
+  } else {
+    status.textContent=`Zakończono. Rozpoznano ${recognized}/${DATA.ocrResults.length} wartości.`;
+    status.style.color='#27ae60';
+  }
+  prog.style.display='none';
+  renderOCRResults();
+}
+
+function showManualOCR(){
+  DATA.ocrResults=ocrQueue.map(item=>({
+    file:item.name, thumb:item.dataUrl, rawText:'', detectedValue:null,
+    detectedSerial:null, matched:false, meterId:null, manual:true
+  }));
+  document.getElementById('ocr-results-card').style.display='block';
+  document.getElementById('ocr-status').textContent='Brak klucza API — wpisz wartości ręcznie przy każdym zdjęciu.';
+  renderOCRResults();
+}
+
+function renderOCRResults(){
+  const c=document.getElementById('ocr-results');
+  if(!DATA.ocrResults.length){c.innerHTML='<p style="color:var(--text-light)">Brak wyników.</p>';return;}
+
+  c.innerHTML=DATA.ocrResults.map((r,i)=>{
+    const meter=r.meterId?DATA.meters.find(m=>m.id===r.meterId):null;
+    const meterOptions=DATA.meters.map(m=>`<option value="${m.id}" ${m.id===r.meterId?'selected':''}>${MI[m.type]} M${m.apartment} — ${ML[m.type]} (${m.serial})</option>`).join('');
+
+    return `<div class="ocr-result-card ${r.matched?'matched':r.error?'':'unmatched'}">
+      <div class="ocr-result-header">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img src="${r.thumb}" class="ocr-thumb" onclick="showImage('${r.thumb}')" alt="${r.file}">
+          <div>
+            <div style="font-weight:600">${r.file}</div>
+            ${r.matched?`<div style="font-size:0.8em;color:var(--accent)">✓ Rozpoznano: M${r.meterApt} ${ML[r.meterType]||''}</div>`:
+              r.error?`<div style="font-size:0.8em;color:var(--danger)">✗ Błąd OCR</div>`:
+              `<div style="font-size:0.8em;color:var(--warning)">⚠ Nie rozpoznano licznika — przypisz ręcznie</div>`}
+          </div>
+        </div>
+        <div class="ocr-value">${r.detectedValue!==null?fmtN(r.detectedValue):'?'}</div>
+      </div>
+      <div class="form-row" style="margin-top:8px;">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Przypisany licznik</label>
+          <select class="form-input" id="ocr-meter-${i}" onchange="updateOCRMatch(${i},this.value)">
+            <option value="">— wybierz licznik —</option>
+            ${meterOptions}
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Wartość odczytu</label>
+          <input type="number" step="0.01" class="form-input" id="ocr-value-${i}" value="${r.detectedValue||''}" placeholder="wpisz wartość">
+        </div>
+      </div>
+      ${r.rawText&&!r.error?`<details style="margin-top:8px"><summary style="font-size:0.8em;color:var(--text-light);cursor:pointer">Rozpoznany tekst</summary><pre style="font-size:0.75em;background:#f5f5f5;padding:8px;border-radius:6px;white-space:pre-wrap;max-height:100px;overflow-y:auto">${r.rawText}</pre></details>`:''}
+    </div>`;
+  }).join('');
+}
+
+function updateOCRMatch(idx,meterId){
+  if(!meterId)return;
+  const m=DATA.meters.find(x=>x.id===meterId);
+  if(m){DATA.ocrResults[idx].meterId=meterId;DATA.ocrResults[idx].matched=true;DATA.ocrResults[idx].meterApt=m.apartment;DATA.ocrResults[idx].meterType=m.type;}
+  saveData(DATA);
+}
+
+function showImage(src){
+  document.getElementById('image-modal-img').src=src;
+  openModal('image-modal');
+}
+
+function applyAllOCR(){
+  let applied=0;
+  DATA.ocrResults.forEach((r,i)=>{
+    const meterId=document.getElementById('ocr-meter-'+i)?.value||r.meterId;
+    const value=parseFloat(document.getElementById('ocr-value-'+i)?.value);
+    if(!meterId||isNaN(value))return;
+
+    const meter=DATA.meters.find(m=>m.id===meterId);
+    if(!meter)return;
+
+    const prev=lastReading(meterId);
+    if(prev&&value<prev.value){
+      toast(`M${meter.apartment} ${ML[meter.type]}: wartość ${fmtN(value)} mniejsza od poprzedniej (${fmtN(prev.value)}) — pominięto`,'error');
+      return;
+    }
+
+    DATA.readings.push({
+      id:genId(), meterId, date:today(), value, previousValue:prev?prev.value:0, source:'ocr'
+    });
+    applied++;
+  });
+
+  if(applied===0){toast('Brak odczytów do zastosowania','error');return;}
+  saveData(DATA);
+  toast(`Zastosowano ${applied} odczytów z OCR`);
+  renderDashboard();
+}
+
+function clearOCR(){
+  DATA.ocrResults=[];ocrQueue=[];
+  document.getElementById('ocr-results-card').style.display='none';
+  document.getElementById('ocr-results').innerHTML='';
+  saveData(DATA);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// READINGS
+// ═══════════════════════════════════════════════════════════════
+function populateFilters(){
+  const ms=new Set();
+  DATA.readings.forEach(r=>{if(r.date)ms.add(r.date.substring(0,7));});
+  DATA.invoices.forEach(i=>{if(i.date)ms.add(i.date.substring(0,7));});
+  ms.add(curMonth());
+  const sorted=[...ms].sort().reverse();
+  ['reading-month-filter','invoice-month-filter'].forEach(id=>{
+    const el=document.getElementById(id); if(!el)return;
+    const cur=el.value||curMonth();
+    el.innerHTML=sorted.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
+  });
+  const af=document.getElementById('reading-apt-filter');
+  if(af&&af.options.length<=1) af.innerHTML='<option value="">Wszystkie</option>'+[1,2,3,4,5,6,7,8].map(n=>`<option value="${n}">M${n}</option>`).join('');
+}
+
+function renderReadings(){
+  populateFilters();
+  const month=document.getElementById('reading-month-filter').value;
+  const aptF=document.getElementById('reading-apt-filter').value;
+  let fl=DATA.readings.filter(r=>r.date&&r.date.startsWith(month));
+  if(aptF){const ids=DATA.meters.filter(m=>m.apartment===+aptF).map(m=>m.id);fl=fl.filter(r=>ids.includes(r.meterId));}
+
+  const tb=document.getElementById('readings-tbody');
+  if(!fl.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-light)">Brak odczytów.</td></tr>';return;}
+
+  tb.innerHTML=fl.sort((a,b)=>{const ma=DATA.meters.find(m=>m.id===a.meterId),mb=DATA.meters.find(m=>m.id===b.meterId);return(ma?.apartment||0)-(mb?.apartment||0);}).map(r=>{
+    const m=DATA.meters.find(x=>x.id===r.meterId);if(!m)return'';
+    const isInitial=r.source==='initial';
+    const u=(!isInitial&&r.previousValue!==null)?(r.value-r.previousValue):0;
+    const c=isInitial?0:u*rate(m.type);
+    const srcLabel=r.source==='initial'?'Stan pocz.':r.source==='ocr'?'OCR':'Ręczny';
+    const srcClass=r.source==='initial'?'badge-warn':r.source==='ocr'?'badge-ok':'badge-neutral';
+    const rowStyle=isInitial?'opacity:0.7;font-style:italic;':'';
+    return `<tr style="${rowStyle}"><td>${r.date}</td><td><strong>M${m.apartment}</strong></td><td>${MI[m.type]} ${ML[m.type]}</td><td><code>${m.serial}</code></td>
+      <td>${isInitial?'—':(r.previousValue!==null?fmtN(r.previousValue):'—')}</td><td><strong>${fmtN(r.value)}</strong></td>
+      <td>${isInitial?'— bazowy —':fmtN(u)+' '+MU[m.type]}</td><td>${isInitial?'—':`<strong>${fmt(c)}</strong>`}</td>
+      <td><span class="apt-tile-badge ${srcClass}">${srcLabel}</span></td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteReading('${r.id}')">Usuń</button></td></tr>`;
+  }).join('');
+}
+
+function openReadingModal(){
+  const sel=document.getElementById('reading-apt');
+  sel.innerHTML=[1,2,3,4,5,6,7,8].map(n=>`<option value="${n}">M${n}</option>`).join('');
+  document.getElementById('reading-date').value=today();
+  loadMetersForReading(); openModal('reading-modal');
+}
+
+function loadMetersForReading(){
+  const apt=+document.getElementById('reading-apt').value;
+  const meters=getMeters(apt);
+  const c=document.getElementById('reading-meters-form');
+  if(!meters.length){c.innerHTML='<p style="color:var(--text-light);padding:20px 0">Brak liczników. Dodaj w zakładce Liczniki.</p>';return;}
+  c.innerHTML=meters.map(m=>{
+    const lr=lastReading(m.id);
+    return `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><strong>${MI[m.type]} ${ML[m.type]}</strong><span style="font-size:0.8em;color:var(--text-light)">${m.serial}</span></div>
+      <div class="form-row"><div class="form-group" style="margin:0"><label class="form-label">Poprzedni</label><input type="number" class="form-input" value="${lr?lr.value:0}" disabled style="background:#eee"></div>
+      <div class="form-group" style="margin:0"><label class="form-label">Aktualny (${MU[m.type]})</label><input type="number" step="0.01" class="form-input reading-value" data-meter-id="${m.id}" data-prev="${lr?lr.value:0}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function saveReading(){
+  const date=document.getElementById('reading-date').value;
+  if(!date){toast('Podaj datę','error');return;}
+  let c=0;
+  document.querySelectorAll('.reading-value').forEach(inp=>{
+    const v=parseFloat(inp.value);if(isNaN(v))return;
+    const prev=parseFloat(inp.dataset.prev)||0;
+    if(v<prev){toast(`Odczyt nie może być mniejszy od ${prev}`,'error');return;}
+    DATA.readings.push({id:genId(),meterId:inp.dataset.meterId,date,value:v,previousValue:prev,source:'manual'});
+    c++;
+  });
+  if(!c){toast('Wprowadź co najmniej jeden odczyt','error');return;}
+  saveData(DATA);closeModal('reading-modal');renderReadings();renderDashboard();toast(`Zapisano ${c} odczytów`);
+}
+function deleteReading(id){if(!confirm('Usunąć?'))return;DATA.readings=DATA.readings.filter(r=>r.id!==id);saveData(DATA);renderReadings();toast('Usunięto');}
+
+// ═══════════════════════════════════════════════════════════════
+// INVOICES
+// ═══════════════════════════════════════════════════════════════
+function renderInvoices(){
+  populateFilters();
+  const month=document.getElementById('invoice-month-filter').value;
+  const tf=document.getElementById('invoice-type-filter').value;
+  let fl=DATA.invoices.filter(i=>i.date&&i.date.startsWith(month));
+  if(tf)fl=fl.filter(i=>i.type===tf);
+  const now=new Date();
+  fl.forEach(i=>{if(i.status==='pending'&&new Date(i.dueDate)<now)i.status='overdue';});saveData(DATA);
+  const tb=document.getElementById('invoices-tbody');
+  if(!fl.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-light)">Brak faktur.</td></tr>';return;}
+  tb.innerHTML=fl.map(i=>{
+    const t=DATA.tenants.find(x=>x.id===i.tenantId);
+    const b=i.status==='paid'?'<span class="apt-tile-badge badge-ok">Opłacona</span>':i.status==='overdue'?'<span class="apt-tile-badge badge-danger">Przeterminowana</span>':'<span class="apt-tile-badge badge-warn">Oczekująca</span>';
+    return `<tr><td><strong>${i.number}</strong></td><td>${i.date}</td><td>${t?t.name:'—'}</td><td>M${t?t.apartment:'?'}</td>
+      <td>${i.type==='czynsz'?'Czynsz':'Media'}</td><td>${fmt(i.amountNet)}</td><td><strong>${fmt(i.amountGross)}</strong></td><td>${b}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="viewInvoice('${i.id}')">Podgląd</button> <button class="btn btn-sm btn-success" onclick="downloadPDF('${i.id}')">PDF</button></td></tr>`;
+  }).join('');
+}
+
+function generateMonthlyInvoices(){
+  const month=document.getElementById('invoice-month-filter')?.value||curMonth();
+  const ex=DATA.invoices.filter(i=>i.date&&i.date.startsWith(month));
+  if(ex.length&&!confirm(`Istnieje ${ex.length} faktur za ${month}. Nadpisać?`))return;
+  DATA.invoices=DATA.invoices.filter(i=>!i.date||!i.date.startsWith(month));
+
+  let gen=0;const dt=today(),due=new Date(Date.now()+14*864e5).toISOString().split('T')[0];
+  const [yr,mo]=month.split('-');
+
+  DATA.tenants.forEach(t=>{
+    // Faktura 1: Czynsz
+    const rn=DATA.nextInvoiceNum++;
+    DATA.invoices.push({id:genId(),tenantId:t.id,type:'czynsz',number:`FV/${yr}/${mo}/${String(rn).padStart(3,'0')}`,
+      amountNet:t.rent,amountGross:+(t.rent*(1+DATA.rates.vat/100)).toFixed(2),date:dt,dueDate:due,status:'pending',
+      items:[{name:'Czynsz najmu — Mieszkanie '+t.apartment,qty:1,unit:'mies.',priceNet:t.rent,totalNet:t.rent}],bankAccount:DATA.owner.bank1||'—'});
+    gen++;
+
+    // Faktura 2: Media
+    const ms=getMeters(t.apartment); const items=[]; let total=0;
+    ms.forEach(m=>{
+      const rs=DATA.readings.filter(r=>r.meterId===m.id&&r.date.startsWith(month)&&r.source!=='initial').sort((a,b)=>b.date.localeCompare(a.date));
+      if(rs.length){const r=rs[0],u=r.previousValue!==null?r.value-r.previousValue:0,c=+(u*rate(m.type)).toFixed(2);
+        items.push({name:ML[m.type],qty:+u.toFixed(2),unit:MU[m.type],priceNet:rate(m.type),totalNet:c});total+=c;}
+    });
+    const gc=t.persons*rate('garbage');
+    items.push({name:'Wywóz odpadów',qty:t.persons,unit:'os.',priceNet:rate('garbage'),totalNet:+gc.toFixed(2)});total+=gc;
+
+    const mn=DATA.nextInvoiceNum++;
+    DATA.invoices.push({id:genId(),tenantId:t.id,type:'media',number:`FV/${yr}/${mo}/${String(mn).padStart(3,'0')}`,
+      amountNet:+total.toFixed(2),amountGross:+(total*(1+DATA.rates.vat/100)).toFixed(2),date:dt,dueDate:due,status:'pending',
+      items,bankAccount:DATA.owner.bank2||'—'});
+    gen++;
+  });
+
+  saveData(DATA);renderInvoices();renderDashboard();toast(`Wygenerowano ${gen} faktur za ${month}`);
+}
+
+function viewInvoice(id){
+  const inv=DATA.invoices.find(i=>i.id===id);if(!inv)return;
+  const t=DATA.tenants.find(x=>x.id===inv.tenantId);
+  document.getElementById('invoice-detail-title').textContent=inv.number;
+  const itm=inv.items?`<table style="width:100%;margin:16px 0"><thead><tr><th>Pozycja</th><th>Ilość</th><th>Jedn.</th><th>Cena netto</th><th>Wartość netto</th></tr></thead><tbody>
+    ${inv.items.map(it=>`<tr><td>${it.name}</td><td>${fmtN(it.qty)}</td><td>${it.unit}</td><td>${fmt(it.priceNet)}</td><td><strong>${fmt(it.totalNet||it.qty*it.priceNet)}</strong></td></tr>`).join('')}</tbody></table>`:'';
+  document.getElementById('invoice-detail-body').innerHTML=`<div style="border:1px solid var(--border);border-radius:8px;padding:24px">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:20px">
+      <div><strong>${DATA.owner.company}</strong><br>${DATA.owner.address}<br>NIP: ${DATA.owner.nip||'—'}</div>
+      <div style="text-align:right"><h2 style="color:var(--primary);margin-bottom:8px">FAKTURA VAT</h2><strong>${inv.number}</strong><br>Data: ${inv.date}<br>Termin: ${inv.dueDate}</div>
+    </div><hr style="border:none;border-top:2px solid var(--primary);margin:16px 0">
+    <div style="margin-bottom:16px"><strong>Nabywca:</strong><br>${t?t.name:'—'}<br>${t&&t.nip?'NIP: '+t.nip+'<br>':''}${t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':''}</div>
+    ${itm}
+    <div style="text-align:right;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div>Netto: <strong>${fmt(inv.amountNet)}</strong></div><div>VAT (${DATA.rates.vat}%): <strong>${fmt(inv.amountGross-inv.amountNet)}</strong></div>
+      <div style="font-size:1.2em;margin-top:8px">Brutto: <strong style="color:var(--primary)">${fmt(inv.amountGross)}</strong></div>
+    </div>
+    <div style="margin-top:20px;padding:12px;background:var(--primary-bg);border-radius:8px;font-size:0.9em"><strong>Nr konta:</strong> ${inv.bankAccount||'—'}</div>
+  </div>`;
+  document.getElementById('invoice-pdf-btn').onclick=()=>downloadPDF(id);
+  openModal('invoice-detail-modal');
+}
+
+async function downloadPDF(id){
+  const inv=DATA.invoices.find(i=>i.id===id);if(!inv)return;
+  const t=DATA.tenants.find(x=>x.id===inv.tenantId);
+  const doc=await createPdfDoc();
+
+  doc.setFontSize(10);doc.setTextColor(100);
+  doc.text(DATA.owner.company,14,20);doc.text(DATA.owner.address,14,26);doc.text('NIP: '+(DATA.owner.nip||'—'),14,32);
+
+  doc.setFontSize(18);doc.setTextColor(27,79,114);doc.text('FAKTURA VAT',140,20);
+  doc.setFontSize(11);doc.setTextColor(0);doc.text(inv.number,140,28);doc.text('Data: '+inv.date,140,34);doc.text('Termin: '+inv.dueDate,140,40);
+
+  doc.setDrawColor(27,79,114);doc.setLineWidth(0.5);doc.line(14,45,196,45);
+  doc.setFontSize(10);doc.text('Nabywca:',14,55);doc.setFontSize(11);
+  doc.text(t?t.name:'—',14,62);
+  if(t&&t.nip)doc.text('NIP: '+t.nip,14,68);
+  doc.text(t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':'',14,t&&t.nip?74:68);
+
+  let y=85;
+  doc.setFillColor(27,79,114);doc.rect(14,y,182,8,'F');doc.setTextColor(255);doc.setFontSize(9);
+  doc.text('Lp.',16,y+6);doc.text('Pozycja',28,y+6);doc.text('Ilość',110,y+6);doc.text('Jedn.',128,y+6);doc.text('Cena netto',146,y+6);doc.text('Wartość netto',170,y+6);
+  y+=10;doc.setTextColor(0);
+  if(inv.items)inv.items.forEach((it,idx)=>{
+    if(idx%2===1){doc.setFillColor(242,247,251);doc.rect(14,y-4,182,8,'F');}
+    doc.text(String(idx+1),16,y+2);doc.text(it.name,28,y+2);doc.text(fmtN(it.qty),110,y+2);
+    doc.text(it.unit,128,y+2);doc.text(fmtN(it.priceNet),146,y+2);doc.text(fmtN(it.totalNet||it.qty*it.priceNet),170,y+2);y+=8;
+  });
+  y+=8;doc.line(120,y,196,y);y+=8;
+  doc.text('Netto: '+fmtN(inv.amountNet)+' zł',150,y);y+=6;
+  doc.text('VAT ('+DATA.rates.vat+'%): '+fmtN(inv.amountGross-inv.amountNet)+' zł',150,y);y+=8;
+  doc.setFontSize(12);doc.setTextColor(27,79,114);doc.text('Brutto: '+fmtN(inv.amountGross)+' zł',150,y);
+  y+=16;doc.setFontSize(9);doc.setTextColor(0);doc.setFillColor(235,245,251);doc.rect(14,y-4,182,12,'F');
+  doc.text('Nr konta: '+(inv.bankAccount||'—'),16,y+3);
+  doc.save(inv.number.replace(/\//g,'-')+'.pdf');toast('PDF pobrany');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAYMENTS
+// ═══════════════════════════════════════════════════════════════
+function renderPayments(){
+  const now=new Date();
+  DATA.invoices.forEach(i=>{if(i.status==='pending'&&new Date(i.dueDate)<now)i.status='overdue';});saveData(DATA);
+  const paid=DATA.invoices.filter(i=>i.status==='paid'),pnd=DATA.invoices.filter(i=>i.status==='pending'),ovd=DATA.invoices.filter(i=>i.status==='overdue');
+  const owed=[...pnd,...ovd].reduce((s,i)=>s+i.amountGross,0);
+  document.getElementById('payment-stats').innerHTML=`
+    <div class="stat-card"><div class="stat-value" style="color:var(--accent)">${paid.length}</div><div class="stat-label">Opłacone</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--warning)">${pnd.length}</div><div class="stat-label">Oczekujące</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--danger)">${ovd.length}</div><div class="stat-label">Przeterminowane</div></div>
+    <div class="stat-card"><div class="stat-value">${fmt(owed)}</div><div class="stat-label">Do zapłaty</div></div>`;
+  const all=[...ovd,...pnd,...paid];
+  const tb=document.getElementById('payments-tbody');
+  if(!all.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-light)">Brak faktur.</td></tr>';return;}
+  tb.innerHTML=all.map(i=>{
+    const t=DATA.tenants.find(x=>x.id===i.tenantId);
+    const due=new Date(i.dueDate),diff=Math.ceil((due-now)/864e5);
+    const dl=i.status==='paid'?'—':diff>0?diff+' dni':diff===0?'Dziś':Math.abs(diff)+' dni po';
+    const dc=i.status==='paid'?'':diff<0?'color:var(--danger);font-weight:700':diff<=3?'color:var(--warning)':'';
+    const b=i.status==='paid'?'<span class="apt-tile-badge badge-ok">Opłacona</span>':i.status==='overdue'?'<span class="apt-tile-badge badge-danger">Przeterminowana</span>':'<span class="apt-tile-badge badge-warn">Oczekująca</span>';
+    return `<tr><td>${i.number}</td><td>${t?t.name:'—'}</td><td>${i.type==='czynsz'?'Czynsz':'Media'}</td>
+      <td><strong>${fmt(i.amountGross)}</strong></td><td>${i.dueDate}</td><td style="${dc}">${dl}</td><td>${b}</td>
+      <td>${i.status!=='paid'?`<button class="btn btn-sm btn-success" onclick="markPaid('${i.id}')">Opłacona</button>`:
+        `<button class="btn btn-sm btn-outline" onclick="markUnpaid('${i.id}')">Cofnij</button>`}</td></tr>`;
+  }).join('');
+}
+function markPaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status='paid';i.paidDate=today();}saveData(DATA);renderPayments();renderDashboard();toast('Oznaczono jako opłacona');}
+function markUnpaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status=new Date(i.dueDate)<new Date()?'overdue':'pending';delete i.paidDate;}saveData(DATA);renderPayments();renderDashboard();toast('Cofnięto status');}
+
+// ═══════════════════════════════════════════════════════════════
+// ROZLICZENIA MIESIĘCZNE
+// ═══════════════════════════════════════════════════════════════
+let settlePreviewData=[];
+let viewingSettleId=null;
+
+function initSettlements(){
+  if(!DATA.settlements) DATA.settlements=[];
+  document.getElementById('settle-month').value=curMonth();
+  // Fill year select
+  const years=new Set();
+  DATA.settlements.forEach(s=>years.add(s.month.substring(0,4)));
+  years.add(new Date().getFullYear().toString());
+  const ysel=document.getElementById('settle-hist-year');
+  ysel.innerHTML=[...years].sort().reverse().map(y=>`<option value="${y}">${y}</option>`).join('')+'<option value="all">Wszystkie</option>';
+  renderSettlementHistory();
+}
+
+function getReadingsForMonth(meterId, month){
+  // Find readings in the given month for this meter
+  return DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)===month && r.source!=='initial');
+}
+
+function getPreviousReading(meterId, month){
+  // Get the latest reading BEFORE the given month (or initial reading)
+  const before=DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)<month).sort((a,b)=>b.date.localeCompare(a.date));
+  return before[0]||null;
+}
+
+function getCurrentReading(meterId, month){
+  // Get the latest reading IN the given month
+  const inMonth=DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)===month && r.source!=='initial').sort((a,b)=>b.date.localeCompare(a.date));
+  if(inMonth.length) return inMonth[0];
+  // If none in month, get latest reading up to end of month
+  const all=DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)<=month).sort((a,b)=>b.date.localeCompare(a.date));
+  return all[0]||null;
+}
+
+function generateSettlement(){
+  const month=document.getElementById('settle-month').value;
+  const aptVal=document.getElementById('settle-apt').value;
+  if(!month){toast('Wybierz miesiąc','error');return;}
+
+  const apts=aptVal==='all'?[1,2,3,4,5,6,7,8]:[parseInt(aptVal)];
+  settlePreviewData=[];
+
+  const monthNames=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
+  const [yr,mn]=month.split('-');
+  const monthLabel=monthNames[parseInt(mn)-1]+' '+yr;
+
+  for(const aptNum of apts){
+    const tenant=getTenant(aptNum);
+    const meters=getMeters(aptNum);
+
+    const mediaItems=[];
+    let totalMedia=0;
+
+    for(const meter of meters){
+      const prev=getPreviousReading(meter.id, month);
+      const curr=getCurrentReading(meter.id, month);
+      const prevVal=prev?prev.value:(meter.initialValue||0);
+      const currVal=curr?curr.value:prevVal;
+      const consumption=Math.max(0, currVal-prevVal);
+      const unitRate=rate(meter.type);
+      const cost=Math.round(consumption*unitRate*100)/100;
+      totalMedia+=cost;
+
+      mediaItems.push({
+        type: meter.type,
+        serial: meter.serial,
+        prevValue: prevVal,
+        currValue: currVal,
+        prevDate: prev?prev.date:'(brak)',
+        currDate: curr?curr.date:'(brak)',
+        consumption: consumption,
+        rate: unitRate,
+        unit: MU[meter.type],
+        cost: cost
+      });
+    }
+
+    // Garbage per person
+    const persons=tenant?parseInt(tenant.persons)||1:1;
+    const garbageCost=Math.round(persons*rate('garbage')*100)/100;
+    totalMedia+=garbageCost;
+
+    const rent=tenant?tenant.rent||0:0;
+    const totalAll=Math.round((rent+totalMedia)*100)/100;
+
+    settlePreviewData.push({
+      id: genId(),
+      month: month,
+      monthLabel: monthLabel,
+      apartment: aptNum,
+      tenantName: tenant?tenant.name:'(brak najemcy)',
+      tenantId: tenant?tenant.id:null,
+      rent: rent,
+      mediaItems: mediaItems,
+      garbageCost: garbageCost,
+      garbagePersons: persons,
+      garbageRate: rate('garbage'),
+      totalMedia: Math.round(totalMedia*100)/100,
+      totalAll: totalAll,
+      createdAt: new Date().toISOString(),
+      rates: {...DATA.rates}
+    });
+  }
+
+  // Render preview
+  document.getElementById('settle-preview-card').style.display='block';
+  document.getElementById('settle-preview-title').textContent=`Podgląd rozliczenia — ${monthLabel}`;
+  renderSettlementPreview();
+}
+
+function renderSettlementPreview(){
+  const body=document.getElementById('settle-preview-body');
+  body.innerHTML=settlePreviewData.map(s=>renderSettlementCard(s,false)).join('');
+}
+
+function renderSettlementCard(s, compact=false){
+  const mediaRows=s.mediaItems.map(m=>`
+    <tr>
+      <td>${MI[m.type]} ${ML[m.type]}</td>
+      <td style="font-size:0.85em;color:var(--text-light)">${m.serial||'—'}</td>
+      <td style="text-align:right">${fmtN(m.prevValue)}</td>
+      <td style="text-align:right">${fmtN(m.currValue)}</td>
+      <td style="text-align:right;font-weight:600">${fmtN(m.consumption)} ${m.unit}</td>
+      <td style="text-align:right">${fmtN(m.rate)} zł/${m.unit}</td>
+      <td style="text-align:right;font-weight:600">${fmt(m.cost)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div style="border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;background:var(--bg);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <span style="font-size:1.2em;font-weight:700;color:var(--primary)">M${s.apartment}</span>
+          <span style="margin-left:12px;color:var(--text)">${s.tenantName}</span>
+          ${!compact?`<span style="margin-left:12px;font-size:0.85em;color:var(--text-light)">${s.monthLabel}</span>`:''}
+        </div>
+        <div style="font-size:1.3em;font-weight:700;color:var(--primary)">${fmt(s.totalAll)}</div>
+      </div>
+
+      <div class="table-wrap">
+        <table style="font-size:0.9em;">
+          <thead><tr>
+            <th>Medium</th><th>Nr licznika</th><th style="text-align:right">Poprz. odczyt</th><th style="text-align:right">Aktualny</th>
+            <th style="text-align:right">Zużycie</th><th style="text-align:right">Stawka</th><th style="text-align:right">Koszt</th>
+          </tr></thead>
+          <tbody>
+            ${mediaRows}
+            <tr style="background:var(--primary-bg)">
+              <td>🗑️ Wywóz śmieci</td><td></td><td></td><td></td>
+              <td style="text-align:right">${s.garbagePersons} os.</td>
+              <td style="text-align:right">${fmtN(s.garbageRate)} zł/os.</td>
+              <td style="text-align:right;font-weight:600">${fmt(s.garbageCost)}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr style="border-top:2px solid var(--border)">
+              <td colspan="6" style="text-align:right;font-weight:600">Media razem:</td>
+              <td style="text-align:right;font-weight:700">${fmt(s.totalMedia)}</td>
+            </tr>
+            <tr>
+              <td colspan="6" style="text-align:right;font-weight:600">Czynsz:</td>
+              <td style="text-align:right;font-weight:700">${fmt(s.rent)}</td>
+            </tr>
+            <tr style="background:var(--primary);color:#fff;font-size:1.05em;">
+              <td colspan="6" style="text-align:right;font-weight:700;padding:10px 8px;">RAZEM DO ZAPŁATY:</td>
+              <td style="text-align:right;font-weight:700;padding:10px 8px;">${fmt(s.totalAll)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>`;
+}
+
+function saveSettlement(){
+  if(!settlePreviewData.length){toast('Brak danych do zapisania','error');return;}
+  // Check for duplicates
+  const month=settlePreviewData[0].month;
+  for(const s of settlePreviewData){
+    const exists=DATA.settlements.find(x=>x.month===s.month && x.apartment===s.apartment);
+    if(exists){
+      if(!confirm(`Rozliczenie M${s.apartment} za ${s.monthLabel} już istnieje. Nadpisać?`)) continue;
+      DATA.settlements=DATA.settlements.filter(x=>!(x.month===s.month && x.apartment===s.apartment));
+    }
+    DATA.settlements.push(s);
+  }
+  saveData(DATA);
+  document.getElementById('settle-preview-card').style.display='none';
+  settlePreviewData=[];
+  renderSettlementHistory();
+  toast(`Zapisano rozliczenie za ${month}`);
+}
+
+function renderSettlementHistory(){
+  if(!DATA.settlements) DATA.settlements=[];
+  const aptFilter=document.getElementById('settle-hist-apt').value;
+  const yearFilter=document.getElementById('settle-hist-year').value;
+
+  let list=DATA.settlements.slice();
+  if(aptFilter!=='all') list=list.filter(s=>s.apartment===parseInt(aptFilter));
+  if(yearFilter!=='all') list=list.filter(s=>s.month.startsWith(yearFilter));
+  list.sort((a,b)=>b.month.localeCompare(a.month)||(a.apartment-b.apartment));
+
+  const container=document.getElementById('settle-history');
+  if(!list.length){
+    container.innerHTML='<p style="color:var(--text-light);padding:16px;">Brak zapisanych rozliczeń. Użyj formularza powyżej aby wygenerować pierwsze rozliczenie.</p>';
+    return;
+  }
+
+  // Group by month
+  const grouped={};
+  list.forEach(s=>{
+    if(!grouped[s.month]) grouped[s.month]={label:s.monthLabel, items:[]};
+    grouped[s.month].items.push(s);
+  });
+
+  container.innerHTML=Object.entries(grouped).map(([month, group])=>{
+    const totalAll=group.items.reduce((sum,s)=>sum+s.totalAll,0);
+    const totalMedia=group.items.reduce((sum,s)=>sum+s.totalMedia,0);
+    const totalRent=group.items.reduce((sum,s)=>sum+s.rent,0);
+
+    const rows=group.items.map(s=>`
+      <tr style="cursor:pointer;" onclick="viewSettlement('${s.id}')">
+        <td><strong>M${s.apartment}</strong></td>
+        <td>${s.tenantName}</td>
+        <td style="text-align:right">${fmt(s.rent)}</td>
+        <td style="text-align:right">${fmt(s.totalMedia)}</td>
+        <td style="text-align:right;font-weight:700;color:var(--primary)">${fmt(s.totalAll)}</td>
+        <td style="text-align:center"><span style="cursor:pointer;color:var(--primary-light)" title="Szczegóły">📋</span></td>
+      </tr>
+    `).join('');
+
+    return `
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:2px solid var(--primary);margin-bottom:8px;">
+          <div style="font-weight:700;font-size:1.1em;color:var(--primary)">${group.label}</div>
+          <div style="display:flex;gap:20px;font-size:0.9em;">
+            <span>Czynsz: <strong>${fmt(totalRent)}</strong></span>
+            <span>Media: <strong>${fmt(totalMedia)}</strong></span>
+            <span style="font-size:1.05em;color:var(--primary)">Razem: <strong>${fmt(totalAll)}</strong></span>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table style="font-size:0.9em;">
+            <thead><tr><th>Lokal</th><th>Najemca</th><th style="text-align:right">Czynsz</th><th style="text-align:right">Media</th><th style="text-align:right">Razem</th><th style="text-align:center">Szczegóły</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function viewSettlement(id){
+  const s=DATA.settlements.find(x=>x.id===id);
+  if(!s){toast('Nie znaleziono rozliczenia','error');return;}
+  viewingSettleId=id;
+  document.getElementById('settle-detail-title').textContent=`Rozliczenie M${s.apartment} — ${s.monthLabel}`;
+  document.getElementById('settle-detail-body').innerHTML=renderSettlementCard(s,true)+`
+    <div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:var(--radius);font-size:0.85em;color:var(--text-light);">
+      <strong>Stawki zastosowane w tym rozliczeniu:</strong>
+      Zimna woda: ${s.rates?.cold_water||'?'} zł/m³ •
+      Ciepła woda: ${s.rates?.hot_water||'?'} zł/m³ •
+      Ogrzewanie: ${s.rates?.heating||'?'} zł/GJ •
+      Energia: ${s.rates?.electricity||'?'} zł/kWh •
+      Śmieci: ${s.rates?.garbage||'?'} zł/os. •
+      VAT: ${s.rates?.vat||'?'}%
+      <br>Wygenerowano: ${new Date(s.createdAt).toLocaleString('pl-PL')}
+    </div>`;
+  openModal('settle-detail-modal');
+}
+
+function deleteSettlement(){
+  if(!viewingSettleId) return;
+  if(!confirm('Na pewno usunąć to rozliczenie?')) return;
+  DATA.settlements=DATA.settlements.filter(s=>s.id!==viewingSettleId);
+  saveData(DATA);
+  closeModal('settle-detail-modal');
+  viewingSettleId=null;
+  renderSettlementHistory();
+  toast('Rozliczenie usunięte');
+}
+
+async function exportSettlementPDF(){
+  if(!viewingSettleId) return;
+  const s=DATA.settlements.find(x=>x.id===viewingSettleId);
+  if(!s) return;
+
+  const doc=await createPdfDoc({unit:'mm',format:'a4'});
+  const pw=210, lm=15, rm=15, cw=pw-lm-rm;
+  let y=15;
+
+  // Header
+  doc.setFontSize(16);doc.setFont('Roboto','normal');
+  doc.text('ROZLICZENIE MIESIĘCZNE',pw/2,y,{align:'center'});
+  y+=8;
+  doc.setFontSize(11);
+  doc.text(`${s.monthLabel} — Mieszkanie M${s.apartment}`,pw/2,y,{align:'center'});
+  y+=10;
+
+  // Owner info
+  doc.setFontSize(9);
+  doc.text('Wynajmujący:',lm,y);
+  doc.text(`${DATA.owner.company} \u2022 ${DATA.owner.name}`,lm+28,y);y+=5;
+  doc.text(`${DATA.owner.address}`,lm+28,y);y+=5;
+  if(DATA.owner.nip) {doc.text(`NIP: ${DATA.owner.nip}`,lm+28,y);y+=5;}
+
+  // Tenant info
+  doc.text('Najemca:',lm,y);
+  doc.text(s.tenantName,lm+28,y);y+=8;
+
+  // Line
+  doc.setDrawColor(27,79,114);doc.setLineWidth(0.5);doc.line(lm,y,pw-rm,y);y+=6;
+
+  // Media table header
+  doc.setFontSize(9);
+  const cols=[lm,lm+35,lm+70,lm+95,lm+120,lm+145];
+  doc.text('Medium',cols[0],y);
+  doc.text('Poprz.',cols[1],y);
+  doc.text('Aktualny',cols[2],y);
+  doc.text('Zużycie',cols[3],y);
+  doc.text('Stawka',cols[4],y);
+  doc.text('Koszt',cols[5],y);
+  y+=2;doc.line(lm,y,pw-rm,y);y+=5;
+
+  // Media rows
+  s.mediaItems.forEach(m=>{
+    doc.text(`${ML[m.type]}`,cols[0],y);
+    doc.text(`${fmtN(m.prevValue)}`,cols[1],y);
+    doc.text(`${fmtN(m.currValue)}`,cols[2],y);
+    doc.text(`${fmtN(m.consumption)} ${m.unit}`,cols[3],y);
+    doc.text(`${fmtN(m.rate)} zł/${m.unit}`,cols[4],y);
+    doc.text(`${fmtN(m.cost)} zł`,cols[5],y);
+    y+=5;
+  });
+
+  // Garbage
+  doc.text(`Wywóz śmieci (${s.garbagePersons} os.)`,cols[0],y);
+  doc.text(`${fmtN(s.garbageRate)} zł/os.`,cols[4],y);
+  doc.text(`${fmtN(s.garbageCost)} zł`,cols[5],y);
+  y+=3;doc.line(lm,y,pw-rm,y);y+=6;
+
+  // Totals
+  doc.text('Media razem:',cols[4],y);doc.text(`${fmtN(s.totalMedia)} zł`,cols[5],y);y+=5;
+  doc.text('Czynsz:',cols[4],y);doc.text(`${fmtN(s.rent)} zł`,cols[5],y);y+=3;
+  doc.line(cols[4],y,pw-rm,y);y+=6;
+  doc.setFontSize(12);
+  doc.text('RAZEM DO ZAPŁATY:',cols[3],y);doc.text(`${fmtN(s.totalAll)} zł`,cols[5],y);
+  y+=12;
+
+  // Rates footnote
+  doc.setFontSize(7);doc.setTextColor(120,120,120);
+  doc.text(`Stawki: Woda zimna ${s.rates?.cold_water} zł/m³ | Woda ciepła ${s.rates?.hot_water} zł/m³ | Ogrzewanie ${s.rates?.heating} zł/GJ | Energia ${s.rates?.electricity} zł/kWh | Śmieci ${s.rates?.garbage} zł/os.`,lm,y);
+  y+=4;
+  doc.text(`Wygenerowano: ${new Date(s.createdAt).toLocaleString('pl-PL')}`,lm,y);
+  doc.setTextColor(0,0,0);
+
+  doc.save(`Rozliczenie-M${s.apartment}-${s.month}.pdf`);
+  toast('PDF zapisany');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════
+function loadSettings(){
+  document.getElementById('rate-cold-water').value=DATA.rates.cold_water;document.getElementById('rate-hot-water').value=DATA.rates.hot_water;
+  document.getElementById('rate-heating').value=DATA.rates.heating;document.getElementById('rate-electricity').value=DATA.rates.electricity;
+  document.getElementById('rate-garbage').value=DATA.rates.garbage;document.getElementById('rate-vat').value=DATA.rates.vat;
+  document.getElementById('owner-company').value=DATA.owner.company;document.getElementById('owner-name').value=DATA.owner.name;
+  document.getElementById('owner-nip').value=DATA.owner.nip;document.getElementById('owner-address').value=DATA.owner.address;
+  document.getElementById('owner-email').value=DATA.owner.email;document.getElementById('owner-phone').value=DATA.owner.phone;
+  document.getElementById('owner-bank1').value=DATA.owner.bank1;document.getElementById('owner-bank2').value=DATA.owner.bank2;
+}
+function saveRates(){
+  DATA.rates={cold_water:+document.getElementById('rate-cold-water').value||0,hot_water:+document.getElementById('rate-hot-water').value||0,
+    heating:+document.getElementById('rate-heating').value||0,electricity:+document.getElementById('rate-electricity').value||0,
+    garbage:+document.getElementById('rate-garbage').value||0,vat:+document.getElementById('rate-vat').value||23};
+  saveData(DATA);toast('Stawki zapisane');
+}
+function saveOwner(){
+  DATA.owner={company:document.getElementById('owner-company').value,name:document.getElementById('owner-name').value,
+    nip:document.getElementById('owner-nip').value,address:document.getElementById('owner-address').value,
+    email:document.getElementById('owner-email').value,phone:document.getElementById('owner-phone').value,
+    bank1:document.getElementById('owner-bank1').value,bank2:document.getElementById('owner-bank2').value};
+  saveData(DATA);toast('Dane zapisane');
+}
+
+// Export/Import
+function exportData(){
+  const b=new Blob([JSON.stringify(DATA,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`brzozowa77-backup-${today()}.json`;a.click();
+  toast('Wyeksportowano');
+}
+function importData(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>{
+    try{const d=JSON.parse(ev.target.result);if(!d.apartments)throw 0;
+      if(!confirm('Nadpisać dane?'))return;DATA={...structuredClone(DEFAULT_DATA),...d};saveData(DATA);renderDashboard();toast('Zaimportowano');}
+    catch(err){toast('Błędny format','error');}
+  };r.readAsText(f);e.target.value='';
+}
+function confirmReset(){
+  if(!confirm('UWAGA: Usunięcie WSZYSTKICH danych. Kontynuować?'))return;
+  if(!confirm('Na pewno?'))return;
+  localStorage.removeItem(DB_KEY);DATA=structuredClone(DEFAULT_DATA);saveData(DATA);renderDashboard();toast('Dane zresetowane','info');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+renderDashboard();loadSettings();
+</script>
+</body>
+</html>
