@@ -228,7 +228,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
     </div>
     <div class="card">
       <div class="table-wrap">
-        <table><thead><tr><th>Mieszkanie</th><th>Najemca (osoba 1)</th><th>Osoby</th><th>E-mail</th><th>Telefon</th><th>Osoba 2</th><th>Czynsz</th><th>Umowa do</th><th>Umowa PDF</th><th>Akcje</th></tr></thead>
+        <table><thead><tr><th>Mieszkanie</th><th>Najemca (osoba 1)</th><th>Osoby</th><th>E-mail</th><th>Telefon</th><th>Osoba 2</th><th>Czynsz</th><th>Kaucja</th><th>Umowa do</th><th>Umowa PDF</th><th>Akcje</th></tr></thead>
         <tbody id="tenants-tbody"></tbody></table>
       </div>
     </div>
@@ -295,32 +295,22 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       OCR — Odczyt liczników ze zdjęć
     </div>
 
-    <!-- Google Drive panel -->
+    <!-- Klucz API -->
     <div class="card">
-      <div class="card-header">
-        <div class="card-title">Google Drive — pobierz zdjęcia z folderu</div>
-        <div id="gdrive-status-indicator"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
+      <div class="form-row" style="align-items:flex-end;">
+        <div class="form-group" style="flex:1">
           <label class="form-label">Klucz API Google Cloud Vision</label>
           <input type="password" class="form-input" id="gcv-api-key" placeholder="AIza...">
         </div>
-        <div class="form-group">
-          <label class="form-label">Folder Google Drive (ID lub nazwa)</label>
-          <input type="text" class="form-input" id="gdrive-folder" placeholder="np. Brzozowa77/Kwiecien2026">
+        <div class="form-group" style="flex:0">
+          <button class="btn btn-outline" onclick="saveOCRSettings()">Zapisz klucz API</button>
         </div>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn btn-primary" onclick="connectGoogleDrive()">Połącz z Google Drive</button>
-        <button class="btn btn-outline" onclick="fetchFromGDrive()" id="btn-fetch-gdrive" disabled>Pobierz zdjęcia z folderu</button>
-        <button class="btn btn-outline" onclick="saveOCRSettings()">Zapisz klucz API</button>
       </div>
     </div>
 
-    <!-- Upload manualny -->
+    <!-- Upload zdjęć -->
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px">Lub: wrzuć zdjęcia ręcznie (drag & drop)</div>
+      <div class="card-title" style="margin-bottom:12px">Wrzuć zdjęcia liczników</div>
       <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
         <p>Przeciągnij zdjęcia liczników tutaj</p>
@@ -558,7 +548,8 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
         <div class="form-group"><label class="form-label">Telefon</label><input type="tel" class="form-input" id="tenant-phone"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Czynsz netto (zł)</label><input type="number" step="0.01" class="form-input" id="tenant-rent" value="2000"></div>
+        <div class="form-group"><label class="form-label">Czynsz (zł/mies.)</label><input type="number" step="0.01" class="form-input" id="tenant-rent" value="2000"></div>
+        <div class="form-group"><label class="form-label">Kaucja (zł)</label><input type="number" step="0.01" class="form-input" id="tenant-deposit" value="0"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Umowa od</label><input type="date" class="form-input" id="tenant-from"></div>
@@ -982,7 +973,7 @@ function renderDashboard(){
   }
   document.getElementById('dashboard-tiles').innerHTML=h;
 }
-function goToApt(n){ getTenant(n)?switchPage('readings'):openTenantModal(null,n); }
+function goToApt(n){ const t=getTenant(n); if(t){switchPage('tenants');setTimeout(()=>editTenant(t.id),100);} else openTenantModal(null,n); }
 
 // ═══════════════════════════════════════════════════════════════
 // TENANTS
@@ -995,7 +986,7 @@ function renderTenants(){
     const allPersons=extras.length?extras.map(p=>`<span title="E-mail: ${p.email||'—'}\nTel: ${p.phone||'—'}" style="cursor:help">${p.name}</span>`).join(', '):(t.person2Name?`<span title="E-mail: ${t.person2Email||'—'}\nTel: ${t.person2Phone||'—'}" style="cursor:help">${t.person2Name}</span>`:'—');
     const contractBtn=t.contractPdf?`<button class="btn btn-sm btn-outline" onclick="viewTenantContract('${t.id}')">📄 Podgląd</button>`:'<span style="color:var(--text-light)">—</span>';
     return `<tr>
-    <td><strong>M${t.apartment}</strong></td><td>${t.name}${t.company?'<br><small style="color:var(--text-light)">'+t.company+'</small>':''}</td><td>${t.persons||1}</td><td>${t.email||'—'}</td><td>${t.phone||'—'}</td><td>${allPersons}</td><td>${fmt(t.rent)}</td><td>${t.contractTo||'—'}</td>
+    <td><strong>M${t.apartment}</strong></td><td>${t.name}${t.company?'<br><small style="color:var(--text-light)">'+t.company+'</small>':''}</td><td>${t.persons||1}</td><td>${t.email||'—'}</td><td>${t.phone||'—'}</td><td>${allPersons}</td><td>${fmt(t.rent)}</td><td>${fmt(t.deposit||0)}</td><td>${t.contractTo||'—'}</td>
     <td>${contractBtn}</td>
     <td><button class="btn btn-sm btn-outline" onclick="editTenant('${t.id}')">Edytuj</button> <button class="btn btn-sm btn-danger" onclick="deleteTenant('${t.id}')">Usuń</button></td>
   </tr>`;}).join('');
@@ -1018,6 +1009,7 @@ function openTenantModal(id,pre){
     document.getElementById('tenant-nip').value=t.nip||''; document.getElementById('tenant-address').value=t.address||'';
     document.getElementById('tenant-email').value=t.email||'';
     document.getElementById('tenant-phone').value=t.phone||''; document.getElementById('tenant-rent').value=t.rent;
+    document.getElementById('tenant-deposit').value=t.deposit||0;
     document.getElementById('tenant-from').value=t.contractFrom||''; document.getElementById('tenant-to').value=t.contractTo||'';
     // Contract PDF
     if(t.contractPdf){
@@ -1036,7 +1028,7 @@ function openTenantModal(id,pre){
     updatePersonsCount();
   } else { document.getElementById('tenant-modal-title').textContent='Dodaj najemcę'; document.getElementById('tenant-id').value='';
     ['tenant-name','tenant-company','tenant-nip','tenant-address','tenant-email','tenant-phone'].forEach(x=>document.getElementById(x).value='');
-    document.getElementById('tenant-rent').value='2000';
+    document.getElementById('tenant-rent').value='2000'; document.getElementById('tenant-deposit').value='0';
     document.getElementById('tenant-from').value=today(); document.getElementById('tenant-to').value='';
     clearExtraPersons(); updatePersonsCount();
   }
@@ -1144,7 +1136,7 @@ function saveTenant(){
     nip:document.getElementById('tenant-nip').value.trim(), address:document.getElementById('tenant-address').value.trim(),
     email:document.getElementById('tenant-email').value.trim(),
     phone:document.getElementById('tenant-phone').value.trim(), rent:parseFloat(document.getElementById('tenant-rent').value)||0,
-    persons:persons,
+    deposit:parseFloat(document.getElementById('tenant-deposit').value)||0, persons:persons,
     contractFrom:document.getElementById('tenant-from').value, contractTo:document.getElementById('tenant-to').value,
     contractPdf:pendingContractData||null, contractFileName:pendingContractName||null,
     extraPersons:extraPersons,
@@ -1570,32 +1562,34 @@ function renderOCRResults(){
     const meterOptions=DATA.meters.map(m=>`<option value="${m.id}" ${m.id===r.meterId?'selected':''}>${MI[m.type]} M${m.apartment} — ${ML[m.type]} (${m.serial})</option>`).join('');
 
     return `<div class="ocr-result-card ${r.matched?'matched':r.error?'':'unmatched'}">
-      <div class="ocr-result-header">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <img src="${r.thumb}" class="ocr-thumb" onclick="showImage('${r.thumb}')" alt="${r.file}">
-          <div>
-            <div style="font-weight:600">${r.file}</div>
-            ${r.matched?`<div style="font-size:0.8em;color:var(--accent)">✓ Rozpoznano: M${r.meterApt} ${ML[r.meterType]||''}</div>`:
-              r.error?`<div style="font-size:0.8em;color:var(--danger)">✗ Błąd OCR</div>`:
-              `<div style="font-size:0.8em;color:var(--warning)">⚠ Nie rozpoznano licznika — przypisz ręcznie</div>`}
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="flex:0 0 auto;text-align:center;">
+          <img src="${r.thumb}" style="max-width:200px;max-height:200px;border-radius:8px;cursor:pointer;object-fit:contain;border:1px solid var(--border);" onclick="showImage('${r.thumb}')" alt="${r.file}">
+          <div style="font-size:0.8em;color:var(--text-light);margin-top:4px;">${r.file}</div>
+        </div>
+        <div style="flex:1;min-width:250px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+              ${r.matched?`<span style="font-size:0.85em;color:var(--accent)">✓ Rozpoznano: M${r.meterApt} ${ML[r.meterType]||''}</span>`:
+                r.error?`<span style="font-size:0.85em;color:var(--danger)">✗ Błąd OCR</span>`:
+                `<span style="font-size:0.85em;color:var(--warning)">⚠ Przypisz licznik ręcznie</span>`}
+            </div>
+            <div class="ocr-value">${r.detectedValue!==null?fmtN(r.detectedValue):'?'}</div>
           </div>
-        </div>
-        <div class="ocr-value">${r.detectedValue!==null?fmtN(r.detectedValue):'?'}</div>
-      </div>
-      <div class="form-row" style="margin-top:8px;">
-        <div class="form-group" style="margin-bottom:0">
-          <label class="form-label">Przypisany licznik</label>
-          <select class="form-input" id="ocr-meter-${i}" onchange="updateOCRMatch(${i},this.value)">
-            <option value="">— wybierz licznik —</option>
-            ${meterOptions}
-          </select>
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label class="form-label">Wartość odczytu</label>
-          <input type="number" step="0.01" class="form-input" id="ocr-value-${i}" value="${r.detectedValue||''}" placeholder="wpisz wartość">
+          <div class="form-group" style="margin-bottom:8px">
+            <label class="form-label">Przypisany licznik</label>
+            <select class="form-input" id="ocr-meter-${i}" onchange="updateOCRMatch(${i},this.value)">
+              <option value="">— wybierz licznik —</option>
+              ${meterOptions}
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Wartość odczytu</label>
+            <input type="number" step="0.01" class="form-input" id="ocr-value-${i}" value="${r.detectedValue||''}" placeholder="wpisz wartość">
+          </div>
+          ${r.rawText&&!r.error?`<details style="margin-top:8px"><summary style="font-size:0.8em;color:var(--text-light);cursor:pointer">Rozpoznany tekst</summary><pre style="font-size:0.75em;background:#f5f5f5;padding:8px;border-radius:6px;white-space:pre-wrap;max-height:80px;overflow-y:auto">${r.rawText}</pre></details>`:''}
         </div>
       </div>
-      ${r.rawText&&!r.error?`<details style="margin-top:8px"><summary style="font-size:0.8em;color:var(--text-light);cursor:pointer">Rozpoznany tekst</summary><pre style="font-size:0.75em;background:#f5f5f5;padding:8px;border-radius:6px;white-space:pre-wrap;max-height:100px;overflow-y:auto">${r.rawText}</pre></details>`:''}
     </div>`;
   }).join('');
 }
@@ -1687,7 +1681,7 @@ function renderReadings(){
       <td>${isInitial?'—':(r.previousValue!==null?fmtN(r.previousValue):'—')}</td><td><strong>${fmtN(r.value)}</strong></td>
       <td>${isInitial?'— bazowy —':fmtN(u)+' '+MU[m.type]}</td><td>${isInitial?'—':`<strong>${fmt(c)}</strong>`}</td>
       <td><span class="apt-tile-badge ${srcClass}">${srcLabel}</span></td>
-      <td><button class="btn btn-sm btn-danger" onclick="deleteReading('${r.id}')">Usuń</button></td></tr>`;
+      <td>${isInitial?'':`<button class="btn btn-sm btn-outline" onclick="editReading('${r.id}')">Edytuj</button> `}<button class="btn btn-sm btn-danger" onclick="deleteReading('${r.id}')">Usuń</button></td></tr>`;
   }).join('');
 }
 
@@ -1728,6 +1722,16 @@ function saveReading(){
   saveData(DATA);closeModal('reading-modal');renderReadings();renderDashboard();toast(`Zapisano ${c} odczytów`);
 }
 function deleteReading(id){if(!confirm('Usunąć?'))return;DATA.readings=DATA.readings.filter(r=>r.id!==id);saveData(DATA);renderReadings();toast('Usunięto');}
+function editReading(id){
+  const r=DATA.readings.find(x=>x.id===id); if(!r)return;
+  const m=DATA.meters.find(x=>x.id===r.meterId);
+  const newVal=prompt(`Edytuj odczyt ${m?ML[m.type]:''} (M${m?m.apartment:'?'})\nAktualna wartość: ${fmtN(r.value)}\nWpisz nową wartość:`,fmtN(r.value));
+  if(newVal===null)return;
+  const v=parseFloat(newVal.replace(',','.'));
+  if(isNaN(v)){toast('Nieprawidłowa wartość','error');return;}
+  r.value=v;
+  saveData(DATA);renderReadings();renderDashboard();toast('Zaktualizowano odczyt');
+}
 
 // ═══════════════════════════════════════════════════════════════
 // INVOICES
@@ -1917,12 +1921,42 @@ function renderPayments(){
     const b=i.status==='paid'?'<span class="apt-tile-badge badge-ok">Opłacona</span>':i.status==='overdue'?'<span class="apt-tile-badge badge-danger">Przeterminowana</span>':'<span class="apt-tile-badge badge-warn">Oczekująca</span>';
     return `<tr><td>${i.number}</td><td>${t?t.name:'—'}</td><td>${i.type==='czynsz'?'Czynsz':'Media'}</td>
       <td><strong>${fmt(i.amountGross)}</strong></td><td>${i.dueDate}</td><td style="${dc}">${dl}</td><td>${b}</td>
-      <td>${i.status!=='paid'?`<button class="btn btn-sm btn-success" onclick="markPaid('${i.id}')">Opłacona</button>`:
+      <td style="white-space:nowrap">${i.status!=='paid'?`<button class="btn btn-sm btn-success" onclick="markPaid('${i.id}')">Opłacona</button> <button class="btn btn-sm btn-warning" onclick="sendReminder('${i.id}')">Przypomnij</button>`:
         `<button class="btn btn-sm btn-outline" onclick="markUnpaid('${i.id}')">Cofnij</button>`}</td></tr>`;
   }).join('');
 }
 function markPaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status='paid';i.paidDate=today();}saveData(DATA);renderPayments();renderDashboard();toast('Oznaczono jako opłacona');}
 function markUnpaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status=new Date(i.dueDate)<new Date()?'overdue':'pending';delete i.paidDate;}saveData(DATA);renderPayments();renderDashboard();toast('Cofnięto status');}
+function sendReminder(id){
+  const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
+  const t=DATA.tenants.find(x=>x.id===inv.tenantId);
+  if(!t||!t.email){toast('Brak adresu e-mail najemcy — uzupełnij dane w zakładce Najemcy','error');return;}
+  const typeName=inv.type==='czynsz'?'czynsz':'media';
+  const bankAcct=inv.bankAccount||'—';
+  const subject=encodeURIComponent(`Przypomnienie o płatności — ${inv.number}`);
+  const body=encodeURIComponent(
+`Szanowny/a ${t.name},
+
+Uprzejmie przypominamy o zaległej płatności za fakturę:
+
+Nr faktury: ${inv.number}
+Typ: ${typeName}
+Kwota: ${fmtN(inv.amountGross)} zł
+Termin płatności: ${inv.dueDate}
+
+Prosimy o dokonanie wpłaty na konto:
+${bankAcct}
+
+W tytule przelewu prosimy o podanie numeru faktury.
+
+Z poważaniem,
+${DATA.owner.company}
+${DATA.owner.phone||''}
+${DATA.owner.email||''}`
+  );
+  window.open(`mailto:${t.email}?subject=${subject}&body=${body}`,'_blank');
+  toast(`Otwarto e-mail do: ${t.email}`);
+}
 
 // ═══════════════════════════════════════════════════════════════
 // ROZLICZENIA MIESIĘCZNE
@@ -2242,17 +2276,7 @@ function viewSettlement(id){
   if(!s){toast('Nie znaleziono rozliczenia','error');return;}
   viewingSettleId=id;
   document.getElementById('settle-detail-title').textContent=`Rozliczenie M${s.apartment} — ${s.monthLabel}`;
-  document.getElementById('settle-detail-body').innerHTML=renderSettlementCard(s,true)+`
-    <div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:var(--radius);font-size:0.85em;color:var(--text-light);">
-      <strong>Stawki zastosowane w tym rozliczeniu:</strong>
-      Zimna woda: ${s.rates?.cold_water||'?'} zł/m³ •
-      Ciepła woda: ${s.rates?.hot_water||'?'} zł/m³ •
-      Ogrzewanie: ${s.rates?.heating||'?'} zł/GJ •
-      Energia: ${s.rates?.electricity||'?'} zł/kWh •
-      Śmieci: ${s.rates?.garbage||'?'} zł/os. •
-      VAT: ${s.rates?.vat||'?'}%
-      <br>Wygenerowano: ${new Date(s.createdAt).toLocaleString('pl-PL')}
-    </div>`;
+  document.getElementById('settle-detail-body').innerHTML=renderSettlementCard(s,true);
   openModal('settle-detail-modal');
 }
 
