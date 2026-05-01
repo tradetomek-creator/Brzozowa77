@@ -866,6 +866,7 @@ function fmtN(n){ return Number(n).toFixed(2).replace('.',','); }
 function genId(){ return Date.now().toString(36)+Math.random().toString(36).substr(2,5); }
 function today(){ return new Date().toISOString().split('T')[0]; }
 function curMonth(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function prevMonth(){ const d=new Date(); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
 function toast(msg,type='success'){ const e=document.createElement('div'); e.className=`toast toast-${type}`; e.textContent=msg; document.getElementById('toasts').appendChild(e); setTimeout(()=>e.remove(),4000); }
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
@@ -1414,7 +1415,8 @@ async function processOCR(){
       }
 
       // === PRIORITY 2: Extract all numbers as fallback ===
-      const numbers=fullText.match(/\d{3,8}[.,]\d{1,3}|\d{4,8}/g)||[];
+      // Include smaller numbers too (e.g. 0,49 for heating) — minimum 1 digit before decimal
+      const numbers=fullText.match(/\d{1,8}[.,]\d{1,3}|\d{3,8}/g)||[];
       // Try to find meter serial — usually alphanumeric pattern
       const serials=fullText.match(/[A-Z]{1,3}[-\s]?\d{3,10}[-\s]?\d{0,6}/gi)||[];
       // Also catch "Nr XXXXX" patterns as serials
@@ -1480,13 +1482,25 @@ async function processOCR(){
 
         if(matchedMeter){
           const lr=lastReading(matchedMeter.id);
-          const valid=candidates.filter(n=>!lr||n.val>=lr.value);
-          detectedValue=valid.length?valid[valid.length-1].val:candidates.length?candidates[candidates.length-1].val:null;
-          if(lr && valid.length>1){
-            valid.sort((a,b)=>Math.abs(a.val-lr.value)-Math.abs(b.val-lr.value));
-            detectedValue=valid[0].val;
+          if(lr && lr.value>0){
+            // PRIORITY: find numbers >= last reading (meter always goes up)
+            const valid=candidates.filter(n=>n.val>=lr.value);
+            if(valid.length){
+              // Pick the one closest to last reading (smallest increase = most likely current reading)
+              valid.sort((a,b)=>Math.abs(a.val-lr.value)-Math.abs(b.val-lr.value));
+              detectedValue=valid[0].val;
+              console.log('OCR: Wybrano wartość najbliższą do ostatniego odczytu:',detectedValue,'(ostatni:',lr.value,')');
+            } else {
+              // No value >= last reading, pick the largest candidate (most likely to be meter reading)
+              detectedValue=candidates.length?candidates[0].val:null;
+              console.log('OCR: Brak wartości >= ostatni odczyt, wybrano największą:',detectedValue);
+            }
+          } else {
+            // No last reading — pick largest number (likely the meter reading)
+            detectedValue=candidates.length?candidates[0].val:null;
           }
         } else {
+          // No matched meter — pick largest number
           detectedValue=candidates.length?candidates[0].val:null;
         }
       }
@@ -1856,7 +1870,7 @@ let viewingSettleId=null;
 
 function initSettlements(){
   if(!DATA.settlements) DATA.settlements=[];
-  document.getElementById('settle-month').value=curMonth();
+  document.getElementById('settle-month').value=prevMonth();
   // Fill year select
   const years=new Set();
   DATA.settlements.forEach(s=>years.add(s.month.substring(0,4)));
@@ -1867,8 +1881,13 @@ function initSettlements(){
 }
 
 function getReadingsForMonth(meterId, month){
-  // Find readings in the given month for this meter
-  return DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)===month && r.source!=='initial');
+  // Find readings in the given month OR the first 5 days of next month
+  // (bo odczyty za kwiecień robimy 1-5 maja)
+  const [yr,mn]=month.split('-').map(Number);
+  const nextMonth=mn===12?`${yr+1}-01`:`${yr}-${String(mn+1).padStart(2,'0')}`;
+  const cutoff=`${nextMonth}-06`; // do 5. dnia następnego miesiąca
+  return DATA.readings.filter(r=>r.meterId===meterId && r.source!=='initial' &&
+    (r.date.substring(0,7)===month || (r.date.substring(0,7)===nextMonth && r.date<=cutoff)));
 }
 
 function getPreviousReading(meterId, month){
@@ -1878,10 +1897,19 @@ function getPreviousReading(meterId, month){
 }
 
 function getCurrentReading(meterId, month){
-  // Get the latest reading IN the given month
-  const inMonth=DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)===month && r.source!=='initial').sort((a,b)=>b.date.localeCompare(a.date));
-  if(inMonth.length) return inMonth[0];
-  // If none in month, get latest reading up to end of month
+  // Get the latest reading for this settlement month
+  // Includes readings from: the settlement month itself + first 5 days of next month
+  // (bo odczyty za kwiecień robimy np. 1 maja)
+  const [yr,mn]=month.split('-').map(Number);
+  const nextMonth=mn===12?`${yr+1}-01`:`${yr}-${String(mn+1).padStart(2,'0')}`;
+  const cutoff=`${nextMonth}-06`;
+
+  const relevant=DATA.readings.filter(r=>r.meterId===meterId && r.source!=='initial' &&
+    (r.date.substring(0,7)===month || (r.date.substring(0,7)===nextMonth && r.date<=cutoff)))
+    .sort((a,b)=>b.date.localeCompare(a.date));
+  if(relevant.length) return relevant[0];
+
+  // Fallback: latest reading up to end of month
   const all=DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)<=month).sort((a,b)=>b.date.localeCompare(a.date));
   return all[0]||null;
 }
@@ -2054,14 +2082,17 @@ function renderSettlementCard(s, compact=false){
 
 function saveSettlement(){
   if(!settlePreviewData.length){toast('Brak danych do zapisania','error');return;}
-  // Check for duplicates
   const month=settlePreviewData[0].month;
+  const hasExisting=DATA.settlements.some(x=>x.month===month);
+
+  if(hasExisting){
+    // Ask once for the whole month
+    if(!confirm(`Rozliczenia za ${settlePreviewData[0].monthLabel} już istnieją. Zaktualizować?`)) return;
+  }
+
   for(const s of settlePreviewData){
-    const exists=DATA.settlements.find(x=>x.month===s.month && x.apartment===s.apartment);
-    if(exists){
-      if(!confirm(`Rozliczenie M${s.apartment} za ${s.monthLabel} już istnieje. Nadpisać?`)) continue;
-      DATA.settlements=DATA.settlements.filter(x=>!(x.month===s.month && x.apartment===s.apartment));
-    }
+    // Remove old entry for this apartment+month if exists
+    DATA.settlements=DATA.settlements.filter(x=>!(x.month===s.month && x.apartment===s.apartment));
     DATA.settlements.push(s);
   }
   saveData(DATA);
