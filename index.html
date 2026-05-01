@@ -372,7 +372,14 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         Faktury
       </div>
-      <button class="btn btn-primary" onclick="generateMonthlyInvoices()">Generuj faktury za miesiąc</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select class="filter-input" id="invoice-apt-gen" style="width:auto;">
+          <option value="all">Wszystkie lokale</option>
+          <option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option>
+          <option value="5">M5</option><option value="6">M6</option><option value="7">M7</option><option value="8">M8</option>
+        </select>
+        <button class="btn btn-primary" onclick="generateMonthlyInvoices()">Generuj faktury</button>
+      </div>
     </div>
     <div class="filters-row">
       <select class="filter-input" id="invoice-month-filter" onchange="renderInvoices()"></select>
@@ -382,7 +389,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
     </div>
     <div class="card">
       <div class="table-wrap">
-        <table><thead><tr><th>Nr faktury</th><th>Data</th><th>Najemca</th><th>Mieszkanie</th><th>Typ</th><th>Kwota netto</th><th>Kwota brutto</th><th>Status</th><th>Akcje</th></tr></thead>
+        <table><thead><tr><th>Nr faktury</th><th>Data</th><th>Najemca</th><th>Mieszkanie</th><th>Typ</th><th>Kwota brutto</th><th>Status</th><th>Akcje</th></tr></thead>
         <tbody id="invoices-tbody"></tbody></table>
       </div>
     </div>
@@ -1739,41 +1746,88 @@ function renderInvoices(){
     const t=DATA.tenants.find(x=>x.id===i.tenantId);
     const b=i.status==='paid'?'<span class="apt-tile-badge badge-ok">Opłacona</span>':i.status==='overdue'?'<span class="apt-tile-badge badge-danger">Przeterminowana</span>':'<span class="apt-tile-badge badge-warn">Oczekująca</span>';
     return `<tr><td><strong>${i.number}</strong></td><td>${i.date}</td><td>${t?t.name:'—'}</td><td>M${t?t.apartment:'?'}</td>
-      <td>${i.type==='czynsz'?'Czynsz':'Media'}</td><td>${fmt(i.amountNet)}</td><td><strong>${fmt(i.amountGross)}</strong></td><td>${b}</td>
-      <td><button class="btn btn-sm btn-outline" onclick="viewInvoice('${i.id}')">Podgląd</button> <button class="btn btn-sm btn-success" onclick="downloadPDF('${i.id}')">PDF</button></td></tr>`;
+      <td>${i.type==='czynsz'?'Czynsz':'Media'}</td><td><strong>${fmt(i.amountGross)}</strong></td><td>${b}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="viewInvoice('${i.id}')">Podgląd</button> <button class="btn btn-sm btn-success" onclick="downloadPDF('${i.id}')">PDF</button> <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${i.id}')">Usuń</button></td></tr>`;
   }).join('');
+}
+
+function deleteInvoice(id){
+  const inv=DATA.invoices.find(i=>i.id===id);
+  if(!inv)return;
+  if(!confirm(`Usunąć fakturę ${inv.number}?`))return;
+  DATA.invoices=DATA.invoices.filter(i=>i.id!==id);
+  saveData(DATA);renderInvoices();renderDashboard();toast(`Usunięto fakturę ${inv.number}`);
 }
 
 function generateMonthlyInvoices(){
   const month=document.getElementById('invoice-month-filter')?.value||curMonth();
-  const ex=DATA.invoices.filter(i=>i.date&&i.date.startsWith(month));
-  if(ex.length&&!confirm(`Istnieje ${ex.length} faktur za ${month}. Nadpisać?`))return;
-  DATA.invoices=DATA.invoices.filter(i=>!i.date||!i.date.startsWith(month));
-
-  let gen=0;const dt=today(),due=new Date(Date.now()+14*864e5).toISOString().split('T')[0];
+  const aptVal=document.getElementById('invoice-apt-gen')?.value||'all';
+  const dt=today(),due=new Date(Date.now()+14*864e5).toISOString().split('T')[0];
   const [yr,mo]=month.split('-');
 
-  DATA.tenants.forEach(t=>{
-    // Faktura 1: Czynsz
+  // Filtruj najemców wg wybranego lokalu
+  let tenants=DATA.tenants.slice();
+  if(aptVal!=='all') tenants=tenants.filter(t=>t.apartment===parseInt(aptVal));
+  if(!tenants.length){toast('Brak najemców do rozliczenia','error');return;}
+
+  // Sprawdź czy istnieją faktury dla tych lokali w tym miesiącu
+  const aptNums=tenants.map(t=>t.apartment);
+  const existing=DATA.invoices.filter(i=>i.date&&i.date.startsWith(month)&&aptNums.includes(DATA.tenants.find(x=>x.id===i.tenantId)?.apartment));
+  if(existing.length&&!confirm(`Istnieje ${existing.length} faktur za ${month} dla wybranych lokali. Usunąć je i wygenerować nowe?`))return;
+  // Usuń tylko faktury dla wybranych lokali
+  const exIds=new Set(existing.map(i=>i.id));
+  DATA.invoices=DATA.invoices.filter(i=>!exIds.has(i.id));
+
+  let gen=0;
+
+  tenants.forEach(t=>{
+    // Faktura 1: Czynsz (brutto = netto, VAT 0%)
     const rn=DATA.nextInvoiceNum++;
     DATA.invoices.push({id:genId(),tenantId:t.id,type:'czynsz',number:`FV/${yr}/${mo}/${String(rn).padStart(3,'0')}`,
-      amountNet:t.rent,amountGross:+(t.rent*(1+DATA.rates.vat/100)).toFixed(2),date:dt,dueDate:due,status:'pending',
-      items:[{name:'Czynsz najmu — Mieszkanie '+t.apartment,qty:1,unit:'mies.',priceNet:t.rent,totalNet:t.rent}],bankAccount:DATA.owner.bank1||'—'});
+      amountNet:t.rent,amountGross:t.rent,date:dt,dueDate:due,status:'pending',
+      items:[{name:'Czynsz najmu — Mieszkanie M'+t.apartment,qty:1,unit:'mies.',priceNet:t.rent,totalNet:t.rent}],bankAccount:DATA.owner.bank1||'—'});
     gen++;
 
-    // Faktura 2: Media
+    // Faktura 2: Media (używa tej samej logiki co rozliczenia)
     const ms=getMeters(t.apartment); const items=[]; let total=0;
+    let coldCons=0, hotCons=0;
+
     ms.forEach(m=>{
-      const rs=DATA.readings.filter(r=>r.meterId===m.id&&r.date.startsWith(month)&&r.source!=='initial').sort((a,b)=>b.date.localeCompare(a.date));
-      if(rs.length){const r=rs[0],u=r.previousValue!==null?r.value-r.previousValue:0,c=+(u*rate(m.type)).toFixed(2);
-        items.push({name:ML[m.type],qty:+u.toFixed(2),unit:MU[m.type],priceNet:rate(m.type),totalNet:c});total+=c;}
+      const reading=getCurrentReading(m.id, month);
+      let consumption=0;
+      if(reading && reading.source!=='initial' && reading.previousValue!==null && reading.previousValue!==undefined){
+        consumption=Math.max(0, reading.value-reading.previousValue);
+      } else if(reading){
+        const prev=getPreviousReading(m.id, month);
+        const prevVal=prev?prev.value:(m.initialValue||0);
+        consumption=Math.max(0, reading.value-prevVal);
+      }
+      if(m.type==='cold_water') coldCons=consumption;
+      if(m.type==='hot_water') hotCons=consumption;
+      const c=+(consumption*rate(m.type)).toFixed(2);
+      items.push({name:ML[m.type],qty:+consumption.toFixed(3),unit:MU[m.type],priceNet:rate(m.type),totalNet:c});
+      total+=c;
     });
-    const gc=t.persons*rate('garbage');
-    items.push({name:'Wywóz odpadów',qty:t.persons,unit:'os.',priceNet:rate('garbage'),totalNet:+gc.toFixed(2)});total+=gc;
+
+    // Ścieki = (zimna + ciepła woda) × stawka
+    const sewageVol=+(coldCons+hotCons).toFixed(3);
+    const sewageCost=+(sewageVol*rate('sewage')).toFixed(2);
+    items.push({name:'Ścieki',qty:sewageVol,unit:'m³',priceNet:rate('sewage'),totalNet:sewageCost});
+    total+=sewageCost;
+
+    // Podgrzanie wody = ciepła woda × stawka
+    const hwHeatCost=+(hotCons*rate('hot_water_heating')).toFixed(2);
+    items.push({name:'Podgrzanie wody',qty:+hotCons.toFixed(3),unit:'m³',priceNet:rate('hot_water_heating'),totalNet:hwHeatCost});
+    total+=hwHeatCost;
+
+    // Wywóz śmieci
+    const gc=+(t.persons*rate('garbage')).toFixed(2);
+    items.push({name:'Wywóz odpadów',qty:t.persons,unit:'os.',priceNet:rate('garbage'),totalNet:gc});
+    total+=gc;
 
     const mn=DATA.nextInvoiceNum++;
     DATA.invoices.push({id:genId(),tenantId:t.id,type:'media',number:`FV/${yr}/${mo}/${String(mn).padStart(3,'0')}`,
-      amountNet:+total.toFixed(2),amountGross:+(total*(1+DATA.rates.vat/100)).toFixed(2),date:dt,dueDate:due,status:'pending',
+      amountNet:+total.toFixed(2),amountGross:+total.toFixed(2),date:dt,dueDate:due,status:'pending',
       items,bankAccount:DATA.owner.bank2||'—'});
     gen++;
   });
@@ -1785,18 +1839,17 @@ function viewInvoice(id){
   const inv=DATA.invoices.find(i=>i.id===id);if(!inv)return;
   const t=DATA.tenants.find(x=>x.id===inv.tenantId);
   document.getElementById('invoice-detail-title').textContent=inv.number;
-  const itm=inv.items?`<table style="width:100%;margin:16px 0"><thead><tr><th>Pozycja</th><th>Ilość</th><th>Jedn.</th><th>Cena netto</th><th>Wartość netto</th></tr></thead><tbody>
+  const itm=inv.items?`<table style="width:100%;margin:16px 0"><thead><tr><th>Pozycja</th><th>Ilość</th><th>Jedn.</th><th>Cena</th><th>Wartość</th></tr></thead><tbody>
     ${inv.items.map(it=>`<tr><td>${it.name}</td><td>${fmtN(it.qty)}</td><td>${it.unit}</td><td>${fmt(it.priceNet)}</td><td><strong>${fmt(it.totalNet||it.qty*it.priceNet)}</strong></td></tr>`).join('')}</tbody></table>`:'';
   document.getElementById('invoice-detail-body').innerHTML=`<div style="border:1px solid var(--border);border-radius:8px;padding:24px">
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:20px">
       <div><strong>${DATA.owner.company}</strong><br>${DATA.owner.address}<br>PESEL: ${DATA.owner.nip||'—'}</div>
-      <div style="text-align:right"><h2 style="color:var(--primary);margin-bottom:8px">FAKTURA VAT</h2><strong>${inv.number}</strong><br>Data: ${inv.date}<br>Termin: ${inv.dueDate}</div>
+      <div style="text-align:right"><h2 style="color:var(--primary);margin-bottom:8px">FAKTURA</h2><strong>${inv.number}</strong><br>Data: ${inv.date}<br>Termin: ${inv.dueDate}</div>
     </div><hr style="border:none;border-top:2px solid var(--primary);margin:16px 0">
     <div style="margin-bottom:16px"><strong>Nabywca:</strong><br>${t?(t.company?t.company+'<br>':'')+t.name:'—'}<br>${t&&t.nip?(t.company?'NIP: ':'PESEL: ')+t.nip+'<br>':''}${t&&t.address?t.address+'<br>':''}${t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':''}</div>
     ${itm}
     <div style="text-align:right;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-      <div>Netto: <strong>${fmt(inv.amountNet)}</strong></div><div>VAT (${DATA.rates.vat}%): <strong>${fmt(inv.amountGross-inv.amountNet)}</strong></div>
-      <div style="font-size:1.2em;margin-top:8px">Brutto: <strong style="color:var(--primary)">${fmt(inv.amountGross)}</strong></div>
+      <div style="font-size:1.2em;margin-top:8px">Do zapłaty: <strong style="color:var(--primary)">${fmt(inv.amountGross)}</strong></div>
     </div>
     <div style="margin-top:20px;padding:12px;background:var(--primary-bg);border-radius:8px;font-size:0.9em"><strong>Nr konta:</strong> ${inv.bankAccount||'—'}</div>
   </div>`;
@@ -1812,7 +1865,7 @@ async function downloadPDF(id){
   doc.setFontSize(10);doc.setTextColor(100);
   doc.text(DATA.owner.company,14,20);doc.text(DATA.owner.address,14,26);doc.text('PESEL: '+(DATA.owner.nip||'—'),14,32);
 
-  doc.setFontSize(18);doc.setTextColor(27,79,114);doc.text('FAKTURA VAT',140,20);
+  doc.setFontSize(18);doc.setTextColor(27,79,114);doc.text('FAKTURA',140,20);
   doc.setFontSize(11);doc.setTextColor(0);doc.text(inv.number,140,28);doc.text('Data: '+inv.date,140,34);doc.text('Termin: '+inv.dueDate,140,40);
 
   doc.setDrawColor(27,79,114);doc.setLineWidth(0.5);doc.line(14,45,196,45);
@@ -1826,7 +1879,7 @@ async function downloadPDF(id){
 
   let y=85;
   doc.setFillColor(27,79,114);doc.rect(14,y,182,8,'F');doc.setTextColor(255);doc.setFontSize(9);
-  doc.text('Lp.',16,y+6);doc.text('Pozycja',28,y+6);doc.text('Ilość',110,y+6);doc.text('Jedn.',128,y+6);doc.text('Cena netto',146,y+6);doc.text('Wartość netto',170,y+6);
+  doc.text('Lp.',16,y+6);doc.text('Pozycja',28,y+6);doc.text('Ilość',110,y+6);doc.text('Jedn.',128,y+6);doc.text('Cena',146,y+6);doc.text('Wartość',174,y+6);
   y+=10;doc.setTextColor(0);
   if(inv.items)inv.items.forEach((it,idx)=>{
     if(idx%2===1){doc.setFillColor(242,247,251);doc.rect(14,y-4,182,8,'F');}
@@ -1834,9 +1887,7 @@ async function downloadPDF(id){
     doc.text(it.unit,128,y+2);doc.text(fmtN(it.priceNet),146,y+2);doc.text(fmtN(it.totalNet||it.qty*it.priceNet),170,y+2);y+=8;
   });
   y+=8;doc.line(120,y,196,y);y+=8;
-  doc.text('Netto: '+fmtN(inv.amountNet)+' zł',150,y);y+=6;
-  doc.text('VAT ('+DATA.rates.vat+'%): '+fmtN(inv.amountGross-inv.amountNet)+' zł',150,y);y+=8;
-  doc.setFontSize(12);doc.setTextColor(27,79,114);doc.text('Brutto: '+fmtN(inv.amountGross)+' zł',150,y);
+  doc.setFontSize(12);doc.setTextColor(27,79,114);doc.text('Do zapłaty: '+fmtN(inv.amountGross)+' zł',145,y);
   y+=16;doc.setFontSize(9);doc.setTextColor(0);doc.setFillColor(235,245,251);doc.rect(14,y-4,182,12,'F');
   doc.text('Nr konta: '+(inv.bankAccount||'—'),16,y+3);
   doc.save(inv.number.replace(/\//g,'-')+'.pdf');toast('PDF pobrany');
