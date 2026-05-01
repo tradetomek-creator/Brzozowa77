@@ -1934,10 +1934,24 @@ function generateSettlement(){
     let totalMedia=0;
 
     for(const meter of meters){
-      const prev=getPreviousReading(meter.id, month);
-      const curr=getCurrentReading(meter.id, month);
-      const prevVal=prev?prev.value:(meter.initialValue||0);
-      const currVal=curr?curr.value:prevVal;
+      // Szukamy najnowszego odczytu dla tego okresu rozliczeniowego
+      // Odczyt zawiera previousValue (stan poprzedni) i value (stan aktualny)
+      const reading=getCurrentReading(meter.id, month);
+      let prevVal, currVal;
+      if(reading && reading.source!=='initial' && reading.previousValue!==null && reading.previousValue!==undefined){
+        // Odczyt ma wbudowaną wartość poprzednią — używamy jej (tak samo jak w zakładce Odczyty)
+        prevVal=reading.previousValue;
+        currVal=reading.value;
+      } else if(reading){
+        // Odczyt bez previousValue — szukamy osobno
+        const prev=getPreviousReading(meter.id, month);
+        prevVal=prev?prev.value:(meter.initialValue||0);
+        currVal=reading.value;
+      } else {
+        // Brak odczytu — zerowe zużycie
+        prevVal=meter.initialValue||0;
+        currVal=prevVal;
+      }
       const consumption=Math.max(0, currVal-prevVal);
       const unitRate=rate(meter.type);
       const cost=Math.round(consumption*unitRate*100)/100;
