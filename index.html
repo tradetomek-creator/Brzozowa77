@@ -501,9 +501,8 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
 
       <div class="card">
         <div class="card-title" style="margin-bottom:16px">Dane właściciela / firmy</div>
-        <div class="form-group"><label class="form-label">Nazwa firmy</label><input type="text" class="form-input" id="owner-company" value="EVENTUS sp. z o.o."></div>
-        <div class="form-group"><label class="form-label">Imię i nazwisko</label><input type="text" class="form-input" id="owner-name" value="Tomasz Słomski"></div>
-        <div class="form-group"><label class="form-label">NIP</label><input type="text" class="form-input" id="owner-nip"></div>
+        <div class="form-group"><label class="form-label">Imię i nazwisko / Nazwa firmy</label><input type="text" class="form-input" id="owner-company" value="Joanna Słomska"></div>
+        <div class="form-group"><label class="form-label">PESEL</label><input type="text" class="form-input" id="owner-nip" placeholder="np. 83010512345"></div>
         <div class="form-group"><label class="form-label">Adres</label><input type="text" class="form-input" id="owner-address" value="Aleja Brzozowa 77, 89-600 Chojnice"></div>
         <div class="form-group"><label class="form-label">E-mail</label><input type="email" class="form-input" id="owner-email" value="tradetomek@gmail.com"></div>
         <div class="form-group"><label class="form-label">Telefon</label><input type="tel" class="form-input" id="owner-phone"></div>
@@ -546,7 +545,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Czynsz netto (zł)</label><input type="number" step="0.01" class="form-input" id="tenant-rent" value="2000"></div>
-        <div class="form-group"><label class="form-label">NIP (opcjonalnie)</label><input type="text" class="form-input" id="tenant-nip"></div>
+        <div class="form-group"><label class="form-label">PESEL (opcjonalnie)</label><input type="text" class="form-input" id="tenant-nip"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Umowa od</label><input type="date" class="form-input" id="tenant-from"></div>
@@ -1781,10 +1780,10 @@ function viewInvoice(id){
     ${inv.items.map(it=>`<tr><td>${it.name}</td><td>${fmtN(it.qty)}</td><td>${it.unit}</td><td>${fmt(it.priceNet)}</td><td><strong>${fmt(it.totalNet||it.qty*it.priceNet)}</strong></td></tr>`).join('')}</tbody></table>`:'';
   document.getElementById('invoice-detail-body').innerHTML=`<div style="border:1px solid var(--border);border-radius:8px;padding:24px">
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:20px">
-      <div><strong>${DATA.owner.company}</strong><br>${DATA.owner.address}<br>NIP: ${DATA.owner.nip||'—'}</div>
+      <div><strong>${DATA.owner.company}</strong><br>${DATA.owner.address}<br>PESEL: ${DATA.owner.nip||'—'}</div>
       <div style="text-align:right"><h2 style="color:var(--primary);margin-bottom:8px">FAKTURA VAT</h2><strong>${inv.number}</strong><br>Data: ${inv.date}<br>Termin: ${inv.dueDate}</div>
     </div><hr style="border:none;border-top:2px solid var(--primary);margin:16px 0">
-    <div style="margin-bottom:16px"><strong>Nabywca:</strong><br>${t?t.name:'—'}<br>${t&&t.nip?'NIP: '+t.nip+'<br>':''}${t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':''}</div>
+    <div style="margin-bottom:16px"><strong>Nabywca:</strong><br>${t?t.name:'—'}<br>${t&&t.nip?'PESEL: '+t.nip+'<br>':''}${t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':''}</div>
     ${itm}
     <div style="text-align:right;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
       <div>Netto: <strong>${fmt(inv.amountNet)}</strong></div><div>VAT (${DATA.rates.vat}%): <strong>${fmt(inv.amountGross-inv.amountNet)}</strong></div>
@@ -1802,7 +1801,7 @@ async function downloadPDF(id){
   const doc=await createPdfDoc();
 
   doc.setFontSize(10);doc.setTextColor(100);
-  doc.text(DATA.owner.company,14,20);doc.text(DATA.owner.address,14,26);doc.text('NIP: '+(DATA.owner.nip||'—'),14,32);
+  doc.text(DATA.owner.company,14,20);doc.text(DATA.owner.address,14,26);doc.text('PESEL: '+(DATA.owner.nip||'—'),14,32);
 
   doc.setFontSize(18);doc.setTextColor(27,79,114);doc.text('FAKTURA VAT',140,20);
   doc.setFontSize(11);doc.setTextColor(0);doc.text(inv.number,140,28);doc.text('Data: '+inv.date,140,34);doc.text('Termin: '+inv.dueDate,140,40);
@@ -1810,7 +1809,7 @@ async function downloadPDF(id){
   doc.setDrawColor(27,79,114);doc.setLineWidth(0.5);doc.line(14,45,196,45);
   doc.setFontSize(10);doc.text('Nabywca:',14,55);doc.setFontSize(11);
   doc.text(t?t.name:'—',14,62);
-  if(t&&t.nip)doc.text('NIP: '+t.nip,14,68);
+  if(t&&t.nip)doc.text('PESEL: '+t.nip,14,68);
   doc.text(t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':'',14,t&&t.nip?74:68);
 
   let y=85;
@@ -2227,7 +2226,7 @@ async function exportSettlementPDF(){
   doc.text('Wynajmujący:',lm,y);
   doc.text(`${DATA.owner.company} \u2022 ${DATA.owner.name}`,lm+28,y);y+=5;
   doc.text(`${DATA.owner.address}`,lm+28,y);y+=5;
-  if(DATA.owner.nip) {doc.text(`NIP: ${DATA.owner.nip}`,lm+28,y);y+=5;}
+  if(DATA.owner.nip) {doc.text(`PESEL: ${DATA.owner.nip}`,lm+28,y);y+=5;}
 
   // Tenant info
   doc.text('Najemca:',lm,y);
@@ -2305,7 +2304,7 @@ function loadSettings(){
   document.getElementById('rate-heating').value=DATA.rates.heating;document.getElementById('rate-electricity').value=DATA.rates.electricity;
   document.getElementById('rate-sewage').value=DATA.rates.sewage||19.70;document.getElementById('rate-hot-water-heating').value=DATA.rates.hot_water_heating||46.80;
   document.getElementById('rate-garbage').value=DATA.rates.garbage;
-  document.getElementById('owner-company').value=DATA.owner.company;document.getElementById('owner-name').value=DATA.owner.name;
+  document.getElementById('owner-company').value=DATA.owner.company;
   document.getElementById('owner-nip').value=DATA.owner.nip;document.getElementById('owner-address').value=DATA.owner.address;
   document.getElementById('owner-email').value=DATA.owner.email;document.getElementById('owner-phone').value=DATA.owner.phone;
   document.getElementById('owner-bank1').value=DATA.owner.bank1;document.getElementById('owner-bank2').value=DATA.owner.bank2;
@@ -2318,7 +2317,7 @@ function saveRates(){
   saveData(DATA);toast('Stawki zapisane');
 }
 function saveOwner(){
-  DATA.owner={company:document.getElementById('owner-company').value,name:document.getElementById('owner-name').value,
+  DATA.owner={company:document.getElementById('owner-company').value,name:document.getElementById('owner-company').value,
     nip:document.getElementById('owner-nip').value,address:document.getElementById('owner-address').value,
     email:document.getElementById('owner-email').value,phone:document.getElementById('owner-phone').value,
     bank1:document.getElementById('owner-bank1').value,bank2:document.getElementById('owner-bank2').value};
