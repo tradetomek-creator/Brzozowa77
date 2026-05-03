@@ -457,6 +457,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeModal('settle-detail-modal')">Zamknij</button>
         <button class="btn btn-danger" onclick="deleteSettlement()" style="margin-right:auto;">Usuń</button>
+        <button class="btn btn-success" onclick="sendSettlementEmail(viewingSettleId)">Wyślij e-mail</button>
         <button class="btn btn-primary" onclick="exportSettlementPDF()">Pobierz PDF</button>
       </div>
     </div>
@@ -1751,7 +1752,7 @@ function renderInvoices(){
     const b=i.status==='paid'?'<span class="apt-tile-badge badge-ok">Opłacona</span>':i.status==='overdue'?'<span class="apt-tile-badge badge-danger">Przeterminowana</span>':'<span class="apt-tile-badge badge-warn">Oczekująca</span>';
     return `<tr><td><strong>${i.number}</strong></td><td>${i.date}</td><td>${t?t.name:'—'}</td><td>M${t?t.apartment:'?'}</td>
       <td>${i.type==='czynsz'?'Czynsz':'Media'}</td><td><strong>${fmt(i.amountGross)}</strong></td><td>${b}</td>
-      <td><button class="btn btn-sm btn-outline" onclick="viewInvoice('${i.id}')">Podgląd</button> <button class="btn btn-sm btn-success" onclick="downloadPDF('${i.id}')">PDF</button> <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${i.id}')">Usuń</button></td></tr>`;
+      <td style="white-space:nowrap"><button class="btn btn-sm btn-outline" onclick="viewInvoice('${i.id}')">Podgląd</button> <button class="btn btn-sm btn-success" onclick="downloadPDF('${i.id}')">PDF</button> <button class="btn btn-sm btn-primary" onclick="sendInvoiceEmail('${i.id}')">Wyślij</button> <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${i.id}')">Usuń</button></td></tr>`;
   }).join('');
 }
 
@@ -1956,6 +1957,77 @@ ${DATA.owner.email||''}`
   );
   window.open(`mailto:${t.email}?subject=${subject}&body=${body}`,'_blank');
   toast(`Otwarto e-mail do: ${t.email}`);
+}
+
+function sendInvoiceEmail(id){
+  const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
+  const t=DATA.tenants.find(x=>x.id===inv.tenantId);
+  if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
+  const typeName=inv.type==='czynsz'?'czynsz':'media';
+  const itemsList=inv.items?inv.items.map(it=>`- ${it.name}: ${fmtN(it.qty)} ${it.unit} × ${fmtN(it.priceNet)} zł = ${fmtN(it.totalNet)} zł`).join('\n'):'';
+  const subject=encodeURIComponent(`Faktura ${inv.number} — ${typeName}`);
+  const body=encodeURIComponent(
+`Szanowny/a ${t.name},
+
+W załączeniu przesyłamy fakturę za ${typeName}:
+
+Nr faktury: ${inv.number}
+Data wystawienia: ${inv.date}
+Termin płatności: ${inv.dueDate}
+
+${itemsList}
+
+Do zapłaty: ${fmtN(inv.amountGross)} zł
+
+Nr konta do wpłaty:
+${inv.bankAccount||'—'}
+
+W tytule przelewu prosimy o podanie numeru faktury.
+
+Z poważaniem,
+${DATA.owner.company}
+${DATA.owner.address||''}
+tel. ${DATA.owner.phone||''}
+${DATA.owner.email||''}`
+  );
+  window.open(`mailto:${t.email}?subject=${subject}&body=${body}`,'_blank');
+  toast(`Otwarto e-mail z fakturą do: ${t.email}`);
+}
+
+function sendSettlementEmail(id){
+  const s=DATA.settlements.find(x=>x.id===id); if(!s)return;
+  const t=DATA.tenants.find(x=>x.id===s.tenantId);
+  if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
+  const mediaList=s.mediaItems.map(m=>`- ${ML[m.type]}: ${fmtN(m.consumption)} ${m.unit} × ${fmtN(m.rate)} zł = ${fmtN(m.cost)} zł`).join('\n');
+  const sewageLine=s.sewageCost?`- Ścieki: ${fmtN(s.sewageVolume)} m³ × ${fmtN(s.sewageRate)} zł = ${fmtN(s.sewageCost)} zł`:'';
+  const hwLine=s.hotWaterHeatingCost?`- Podgrzanie wody: ${fmtN(s.hotWaterHeatingVolume)} m³ × ${fmtN(s.hotWaterHeatingRate)} zł = ${fmtN(s.hotWaterHeatingCost)} zł`:'';
+  const garbageLine=`- Wywóz śmieci: ${s.garbagePersons} os. × ${fmtN(s.garbageRate)} zł = ${fmtN(s.garbageCost)} zł`;
+  const subject=encodeURIComponent(`Rozliczenie mediów M${s.apartment} — ${s.monthLabel}`);
+  const body=encodeURIComponent(
+`Szanowny/a ${t.name},
+
+Przesyłamy rozliczenie mediów za ${s.monthLabel} dla lokalu M${s.apartment}:
+
+${mediaList}
+${sewageLine}
+${hwLine}
+${garbageLine}
+
+Media razem: ${fmtN(s.totalMedia)} zł
+Czynsz: ${fmtN(s.rent)} zł
+RAZEM DO ZAPŁATY: ${fmtN(s.totalAll)} zł
+
+Nr konta do wpłaty:
+${DATA.owner.bank2||DATA.owner.bank1||'—'}
+
+Z poważaniem,
+${DATA.owner.company}
+${DATA.owner.address||''}
+tel. ${DATA.owner.phone||''}
+${DATA.owner.email||''}`
+  );
+  window.open(`mailto:${t.email}?subject=${subject}&body=${body}`,'_blank');
+  toast(`Otwarto e-mail z rozliczeniem do: ${t.email}`);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2247,7 +2319,7 @@ function renderSettlementHistory(){
         <td style="text-align:right">${fmt(s.rent)}</td>
         <td style="text-align:right">${fmt(s.totalMedia)}</td>
         <td style="text-align:right;font-weight:700;color:var(--primary)">${fmt(s.totalAll)}</td>
-        <td style="text-align:center"><span style="cursor:pointer;color:var(--primary-light)" title="Szczegóły">📋</span></td>
+        <td style="text-align:center;white-space:nowrap"><span style="cursor:pointer;color:var(--primary-light)" title="Szczegóły">📋</span> <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();sendSettlementEmail('${s.id}')">Wyślij</button></td>
       </tr>
     `).join('');
 
@@ -2263,7 +2335,7 @@ function renderSettlementHistory(){
         </div>
         <div class="table-wrap">
           <table style="font-size:0.9em;">
-            <thead><tr><th>Lokal</th><th>Najemca</th><th style="text-align:right">Czynsz</th><th style="text-align:right">Media</th><th style="text-align:right">Razem</th><th style="text-align:center">Szczegóły</th></tr></thead>
+            <thead><tr><th>Lokal</th><th>Najemca</th><th style="text-align:right">Czynsz</th><th style="text-align:right">Media</th><th style="text-align:right">Razem</th><th style="text-align:center">Akcje</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
