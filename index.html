@@ -717,125 +717,22 @@ try{
   });
 }catch(e){console.warn('Firebase init error:',e);}
 
-let gmailAccessToken=null;
-
 function handleAuth(){
   if(firebaseUser){
     if(!confirm('Wylogować się? Dane lokalne zostaną zachowane.')) return;
-    gmailAccessToken=null;
     firebase.auth().signOut();
   } else {
     const provider=new firebase.auth.GoogleAuthProvider();
-    provider.addScope('https://www.googleapis.com/auth/gmail.send');
-    firebase.auth().signInWithPopup(provider).then(result=>{
-      if(result.credential&&result.credential.accessToken){
-        gmailAccessToken=result.credential.accessToken;
-      }
-    }).catch(err=>{
+    firebase.auth().signInWithPopup(provider).catch(err=>{
       if(err.code==='auth/popup-closed-by-user') return;
       toast('Błąd logowania: '+err.message,'error');
     });
   }
 }
 
-// Pobierz token Gmail — reauth na aktualnym użytkowniku (zachowuje sesję Firebase)
-async function getGmailToken(){
-  if(gmailAccessToken) return gmailAccessToken;
-  if(!firebaseUser){toast('Zaloguj się aby wysyłać e-maile','error');return null;}
-  const provider=new firebase.auth.GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/gmail.send');
-  try{
-    const result=await firebaseUser.reauthenticateWithPopup(provider);
-    if(result.credential&&result.credential.accessToken){
-      gmailAccessToken=result.credential.accessToken;
-      return gmailAccessToken;
-    }
-    toast('Nie uzyskano tokena Gmail — spróbuj ponownie','error');
-    return null;
-  }catch(e){
-    if(e.code==='auth/popup-closed-by-user') return null;
-    if(e.code==='auth/user-mismatch'){
-      // Użytkownik wybrał inne konto — spróbuj signInWithPopup
-      try{
-        const result2=await firebase.auth().signInWithPopup(provider);
-        if(result2.credential&&result2.credential.accessToken){
-          gmailAccessToken=result2.credential.accessToken;
-          return gmailAccessToken;
-        }
-      }catch(e2){
-        if(e2.code!=='auth/popup-closed-by-user') toast('Błąd Gmail: '+e2.message,'error');
-      }
-    } else {
-      toast('Błąd autoryzacji Gmail: '+e.message,'error');
-    }
-    return null;
-  }
-}
-
-// Send email via Gmail API with PDF attachment
-async function sendGmailWithPDF(to, subject, bodyText, pdfBlob, pdfFilename){
-  const token=gmailAccessToken;
-  if(!token){toast('Brak tokena Gmail — wyloguj się i zaloguj ponownie','error');return false;}
-
-  // Convert PDF blob to base64
-  const pdfBuffer=await pdfBlob.arrayBuffer();
-  const pdfBytes=new Uint8Array(pdfBuffer);
-  let pdfBase64='';
-  for(let i=0;i<pdfBytes.length;i++) pdfBase64+=String.fromCharCode(pdfBytes[i]);
-  pdfBase64=btoa(pdfBase64);
-
-  // Build MIME message
-  const boundary='boundary_'+Date.now();
-  const fromEmail=firebaseUser?firebaseUser.email:'alejabrzozowa77@gmail.com';
-  const mime=[
-    `From: ${fromEmail}`,
-    `To: ${to}`,
-    `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/plain; charset=UTF-8`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    btoa(unescape(encodeURIComponent(bodyText))),
-    ``,
-    `--${boundary}`,
-    `Content-Type: application/pdf; name="${pdfFilename}"`,
-    `Content-Disposition: attachment; filename="${pdfFilename}"`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    pdfBase64,
-    ``,
-    `--${boundary}--`
-  ].join('\r\n');
-
-  // URL-safe base64 encode
-  const rawMsg=btoa(unescape(encodeURIComponent(mime)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-
-  try{
-    const resp=await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send',{
-      method:'POST',
-      headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
-      body:JSON.stringify({raw:rawMsg})
-    });
-    if(resp.ok){
-      toast(`E-mail wysłany do: ${to}`);
-      return true;
-    }
-    const err=await resp.json();
-    if(resp.status===401||resp.status===403){
-      gmailAccessToken=null;
-      toast('Token wygasł — kliknij Wyślij ponownie','error');
-    } else {
-      toast(`Błąd wysyłki: ${err.error?.message||resp.status}`,'error');
-    }
-    return false;
-  }catch(e){
-    toast('Błąd połączenia z Gmail API: '+e.message,'error');
-    return false;
-  }
+function openGmail(to, subject, body){
+  const url=`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.open(url,'_blank');
 }
 
 // Auth state listener
@@ -1996,25 +1893,17 @@ function renderPayments(){
 }
 function markPaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status='paid';i.paidDate=today();}saveData(DATA);renderPayments();renderDashboard();toast('Oznaczono jako opłacona');}
 function markUnpaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status=new Date(i.dueDate)<new Date()?'overdue':'pending';delete i.paidDate;}saveData(DATA);renderPayments();renderDashboard();toast('Cofnięto status');}
-function openGmail(to, subject, body){
-  const url=`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  window.open(url,'_blank');
-}
 
 async function sendReminder(id){
   const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
   const t=DATA.tenants.find(x=>x.id===inv.tenantId);
   if(!t||!t.email){toast('Brak adresu e-mail najemcy — uzupełnij dane w zakładce Najemcy','error');return;}
-  // WAŻNE: token NAJPIERW (bezpośrednio z kliknięcia użytkownika — popup nie będzie zablokowany)
-  const token=await getGmailToken();
-  if(!token) return;
-  // Teraz generuj PDF (async — ale popup już nie potrzebny)
-  toast('Przygotowuję przypomnienie...','info');
-  const pdfBlob=await downloadPDF(id, true);
-  const pdfName=inv.number.replace(/\//g,'-')+'.pdf';
+  // Pobierz PDF
+  await downloadPDF(id);
   const bankAcct=inv.bankAccount||'—';
-  const subject=`Przypomnienie o płatności — faktura ${inv.number}`;
-  const body=`Szanowna Pani / Szanowny Panie,
+  openGmail(t.email,
+    `Przypomnienie o płatności — faktura ${inv.number}`,
+`Szanowna Pani / Szanowny Panie,
 
 uprzejmie przypominam o nieuregulowanej płatności za fakturę nr ${inv.number}.
 
@@ -2026,41 +1915,29 @@ ${bankAcct}
 
 W tytule przelewu proszę wpisać numer faktury: ${inv.number}
 
-W załączeniu przesyłam fakturę.
-
 W razie pytań pozostaję do dyspozycji.
 
 Z poważaniem,
 ${DATA.owner.company}
 ${DATA.owner.address||''}
 tel. ${DATA.owner.phone||''}
-e-mail: ${DATA.owner.email||''}`;
-
-  if(pdfBlob){
-    await sendGmailWithPDF(t.email, subject, body, pdfBlob, pdfName);
-  } else {
-    openGmail(t.email, subject, body);
-  }
+e-mail: ${DATA.owner.email||''}`
+  );
+  toast('PDF pobrany — przeciągnij go do okna Gmail','info');
 }
 
 async function sendInvoiceEmail(id){
   const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
   const t=DATA.tenants.find(x=>x.id===inv.tenantId);
   if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
-  // WAŻNE: token NAJPIERW (bezpośrednio z kliknięcia — popup nie zablokowany)
-  const token=await getGmailToken();
-  if(!token) return;
-  // Teraz generuj PDF
-  toast('Generuję fakturę i wysyłam e-mail...','info');
-  const pdfBlob=await downloadPDF(id, true);
-  const pdfName=inv.number.replace(/\//g,'-')+'.pdf';
-
+  // Pobierz PDF
+  await downloadPDF(id);
   const [yr,mo]=inv.date.split('-');
   const monthNames=['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
   const monthLabel=monthNames[parseInt(mo)-1]+' '+yr;
-
-  const subject=`Faktura za czynsz nr ${inv.number} — ${monthLabel} — lokal M${t.apartment}`;
-  const body=`Szanowna Pani / Szanowny Panie,
+  openGmail(t.email,
+    `Faktura za czynsz nr ${inv.number} — ${monthLabel} — lokal M${t.apartment}`,
+`Szanowna Pani / Szanowny Panie,
 
 w załączeniu przesyłam fakturę nr ${inv.number} za czynsz najmu lokalu mieszkalnego M${t.apartment} przy Al. Brzozowej 77, 89-600 Chojnice za miesiąc ${monthLabel}.
 
@@ -2078,34 +1955,24 @@ Z poważaniem,
 ${DATA.owner.company}
 ${DATA.owner.address||''}
 tel. ${DATA.owner.phone||''}
-e-mail: ${DATA.owner.email||''}`;
-
-  if(pdfBlob){
-    await sendGmailWithPDF(t.email, subject, body, pdfBlob, pdfName);
-  } else {
-    openGmail(t.email, subject, body);
-  }
+e-mail: ${DATA.owner.email||''}`
+  );
+  toast('PDF pobrany — przeciągnij go do okna Gmail','info');
 }
 
 async function sendSettlementEmail(id){
   const s=DATA.settlements.find(x=>x.id===id); if(!s)return;
   const t=DATA.tenants.find(x=>x.id===s.tenantId);
   if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
-  // WAŻNE: token NAJPIERW (bezpośrednio z kliknięcia — popup nie zablokowany)
-  const token=await getGmailToken();
-  if(!token) return;
-  // Teraz generuj PDF
-  toast('Generuję rozliczenie i wysyłam e-mail...','info');
-  const pdfBlob=await exportSettlementPDF(id, true);
-  const pdfName=`Rozliczenie-M${s.apartment}-${s.month}.pdf`;
-
+  // Pobierz PDF
+  await exportSettlementPDF(id);
   const mediaList=s.mediaItems.map(m=>`- ${ML[m.type]}: ${fmtN(m.consumption)} ${m.unit} x ${fmtN(m.rate)} zł = ${fmtN(m.cost)} zł`).join('\n');
   const sewageLine=s.sewageCost?`- Ścieki: ${fmtN(s.sewageVolume)} m³ x ${fmtN(s.sewageRate)} zł = ${fmtN(s.sewageCost)} zł`:'';
   const hwLine=s.hotWaterHeatingCost?`- Podgrzanie wody: ${fmtN(s.hotWaterHeatingVolume)} m³ x ${fmtN(s.hotWaterHeatingRate)} zł = ${fmtN(s.hotWaterHeatingCost)} zł`:'';
   const garbageLine=`- Wywóz śmieci: ${s.garbagePersons} os. x ${fmtN(s.garbageRate)} zł = ${fmtN(s.garbageCost)} zł`;
-
-  const subject=`Rozliczenie mediów — ${s.monthLabel} — lokal M${s.apartment}`;
-  const body=`Szanowna Pani / Szanowny Panie,
+  openGmail(t.email,
+    `Rozliczenie mediów — ${s.monthLabel} — lokal M${s.apartment}`,
+`Szanowna Pani / Szanowny Panie,
 
 w załączeniu przesyłam rozliczenie zużycia mediów za miesiąc ${s.monthLabel} dla lokalu M${s.apartment} przy Al. Brzozowej 77, 89-600 Chojnice.
 
@@ -2126,13 +1993,9 @@ Z poważaniem,
 ${DATA.owner.company}
 ${DATA.owner.address||''}
 tel. ${DATA.owner.phone||''}
-e-mail: ${DATA.owner.email||''}`;
-
-  if(pdfBlob){
-    await sendGmailWithPDF(t.email, subject, body, pdfBlob, pdfName);
-  } else {
-    openGmail(t.email, subject, body);
-  }
+e-mail: ${DATA.owner.email||''}`
+  );
+  toast('PDF pobrany — przeciągnij go do okna Gmail','info');
 }
 
 // ═══════════════════════════════════════════════════════════════
