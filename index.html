@@ -1786,54 +1786,11 @@ function generateMonthlyInvoices(){
   let gen=0;
 
   tenants.forEach(t=>{
-    // Faktura 1: Czynsz (brutto = netto, VAT 0%)
+    // Faktura: Czynsz (brutto = netto, VAT 0%)
     const rn=DATA.nextInvoiceNum++;
     DATA.invoices.push({id:genId(),tenantId:t.id,type:'czynsz',number:`FV/${yr}/${mo}/${String(rn).padStart(3,'0')}`,
       amountNet:t.rent,amountGross:t.rent,date:dt,dueDate:due,status:'pending',
       items:[{name:'Czynsz najmu — Mieszkanie M'+t.apartment,qty:1,unit:'mies.',priceNet:t.rent,totalNet:t.rent}],bankAccount:DATA.owner.bank1||'—'});
-    gen++;
-
-    // Faktura 2: Media (używa tej samej logiki co rozliczenia)
-    const ms=getMeters(t.apartment); const items=[]; let total=0;
-    let coldCons=0, hotCons=0;
-
-    ms.forEach(m=>{
-      const reading=getCurrentReading(m.id, month);
-      let consumption=0;
-      if(reading && reading.source!=='initial' && reading.previousValue!==null && reading.previousValue!==undefined){
-        consumption=Math.max(0, reading.value-reading.previousValue);
-      } else if(reading){
-        const prev=getPreviousReading(m.id, month);
-        const prevVal=prev?prev.value:(m.initialValue||0);
-        consumption=Math.max(0, reading.value-prevVal);
-      }
-      if(m.type==='cold_water') coldCons=consumption;
-      if(m.type==='hot_water') hotCons=consumption;
-      const c=+(consumption*rate(m.type)).toFixed(2);
-      items.push({name:ML[m.type],qty:+consumption.toFixed(3),unit:MU[m.type],priceNet:rate(m.type),totalNet:c});
-      total+=c;
-    });
-
-    // Ścieki = (zimna + ciepła woda) × stawka
-    const sewageVol=+(coldCons+hotCons).toFixed(3);
-    const sewageCost=+(sewageVol*rate('sewage')).toFixed(2);
-    items.push({name:'Ścieki',qty:sewageVol,unit:'m³',priceNet:rate('sewage'),totalNet:sewageCost});
-    total+=sewageCost;
-
-    // Podgrzanie wody = ciepła woda × stawka
-    const hwHeatCost=+(hotCons*rate('hot_water_heating')).toFixed(2);
-    items.push({name:'Podgrzanie wody',qty:+hotCons.toFixed(3),unit:'m³',priceNet:rate('hot_water_heating'),totalNet:hwHeatCost});
-    total+=hwHeatCost;
-
-    // Wywóz śmieci
-    const gc=+(t.persons*rate('garbage')).toFixed(2);
-    items.push({name:'Wywóz odpadów',qty:t.persons,unit:'os.',priceNet:rate('garbage'),totalNet:gc});
-    total+=gc;
-
-    const mn=DATA.nextInvoiceNum++;
-    DATA.invoices.push({id:genId(),tenantId:t.id,type:'media',number:`FV/${yr}/${mo}/${String(mn).padStart(3,'0')}`,
-      amountNet:+total.toFixed(2),amountGross:+total.toFixed(2),date:dt,dueDate:due,status:'pending',
-      items,bankAccount:DATA.owner.bank2||'—'});
     gen++;
   });
 
@@ -2013,9 +1970,7 @@ ${sewageLine}
 ${hwLine}
 ${garbageLine}
 
-Media razem: ${fmtN(s.totalMedia)} zł
-Czynsz: ${fmtN(s.rent)} zł
-RAZEM DO ZAPŁATY: ${fmtN(s.totalAll)} zł
+MEDIA RAZEM: ${fmtN(s.totalAll)} zł
 
 Nr konta do wpłaty:
 ${DATA.owner.bank2||DATA.owner.bank1||'—'}
@@ -2157,8 +2112,7 @@ function generateSettlement(){
     const garbageCost=Math.round(persons*rate('garbage')*100)/100;
     totalMedia+=garbageCost;
 
-    const rent=tenant?tenant.rent||0:0;
-    const totalAll=Math.round((rent+totalMedia)*100)/100;
+    const totalAll=Math.round(totalMedia*100)/100;
 
     settlePreviewData.push({
       id: genId(),
@@ -2167,7 +2121,6 @@ function generateSettlement(){
       apartment: aptNum,
       tenantName: tenant?tenant.name:'(brak najemcy)',
       tenantId: tenant?tenant.id:null,
-      rent: rent,
       mediaItems: mediaItems,
       sewageVolume, sewageRate, sewageCost,
       hotWaterHeatingVolume: hotConsumption, hotWaterHeatingRate, hotWaterHeatingCost,
@@ -2244,16 +2197,8 @@ function renderSettlementCard(s, compact=false){
             </tr>
           </tbody>
           <tfoot>
-            <tr style="border-top:2px solid var(--border)">
-              <td colspan="6" style="text-align:right;font-weight:600">Media razem:</td>
-              <td style="text-align:right;font-weight:700">${fmt(s.totalMedia)}</td>
-            </tr>
-            <tr>
-              <td colspan="6" style="text-align:right;font-weight:600">Czynsz:</td>
-              <td style="text-align:right;font-weight:700">${fmt(s.rent)}</td>
-            </tr>
             <tr style="background:var(--primary);color:#fff;font-size:1.05em;">
-              <td colspan="6" style="text-align:right;font-weight:700;padding:10px 8px;">RAZEM DO ZAPŁATY:</td>
+              <td colspan="6" style="text-align:right;font-weight:700;padding:10px 8px;">MEDIA RAZEM:</td>
               <td style="text-align:right;font-weight:700;padding:10px 8px;">${fmt(s.totalAll)}</td>
             </tr>
           </tfoot>
@@ -2308,17 +2253,13 @@ function renderSettlementHistory(){
   });
 
   container.innerHTML=Object.entries(grouped).map(([month, group])=>{
-    const totalAll=group.items.reduce((sum,s)=>sum+s.totalAll,0);
     const totalMedia=group.items.reduce((sum,s)=>sum+s.totalMedia,0);
-    const totalRent=group.items.reduce((sum,s)=>sum+s.rent,0);
 
     const rows=group.items.map(s=>`
       <tr style="cursor:pointer;" onclick="viewSettlement('${s.id}')">
         <td><strong>M${s.apartment}</strong></td>
         <td>${s.tenantName}</td>
-        <td style="text-align:right">${fmt(s.rent)}</td>
-        <td style="text-align:right">${fmt(s.totalMedia)}</td>
-        <td style="text-align:right;font-weight:700;color:var(--primary)">${fmt(s.totalAll)}</td>
+        <td style="text-align:right;font-weight:700;color:var(--primary)">${fmt(s.totalMedia)}</td>
         <td style="text-align:center;white-space:nowrap"><span style="cursor:pointer;color:var(--primary-light)" title="Szczegóły">📋</span> <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();sendSettlementEmail('${s.id}')">Wyślij</button></td>
       </tr>
     `).join('');
@@ -2328,14 +2269,12 @@ function renderSettlementHistory(){
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:2px solid var(--primary);margin-bottom:8px;">
           <div style="font-weight:700;font-size:1.1em;color:var(--primary)">${group.label}</div>
           <div style="display:flex;gap:20px;font-size:0.9em;">
-            <span>Czynsz: <strong>${fmt(totalRent)}</strong></span>
-            <span>Media: <strong>${fmt(totalMedia)}</strong></span>
-            <span style="font-size:1.05em;color:var(--primary)">Razem: <strong>${fmt(totalAll)}</strong></span>
+            <span style="font-size:1.05em;color:var(--primary)">Media razem: <strong>${fmt(totalMedia)}</strong></span>
           </div>
         </div>
         <div class="table-wrap">
           <table style="font-size:0.9em;">
-            <thead><tr><th>Lokal</th><th>Najemca</th><th style="text-align:right">Czynsz</th><th style="text-align:right">Media</th><th style="text-align:right">Razem</th><th style="text-align:center">Akcje</th></tr></thead>
+            <thead><tr><th>Lokal</th><th>Najemca</th><th style="text-align:right">Media</th><th style="text-align:center">Akcje</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -2437,11 +2376,8 @@ async function exportSettlementPDF(){
   y+=3;doc.line(lm,y,pw-rm,y);y+=6;
 
   // Totals
-  doc.text('Media razem:',cols[4],y);doc.text(`${fmtN(s.totalMedia)} zł`,cols[5],y);y+=5;
-  doc.text('Czynsz:',cols[4],y);doc.text(`${fmtN(s.rent)} zł`,cols[5],y);y+=3;
-  doc.line(cols[4],y,pw-rm,y);y+=6;
   doc.setFontSize(12);
-  doc.text('RAZEM DO ZAPŁATY:',cols[3],y);doc.text(`${fmtN(s.totalAll)} zł`,cols[5],y);
+  doc.text('MEDIA RAZEM:',cols[3],y);doc.text(`${fmtN(s.totalAll)} zł`,cols[5],y);
   y+=12;
 
   // Rates footnote
