@@ -982,7 +982,8 @@ function goToApt(n){ const t=getTenant(n); if(t){switchPage('tenants');setTimeou
 function renderTenants(){
   const tb=document.getElementById('tenants-tbody');
   if(!DATA.tenants.length){ tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-light)">Brak najemców.</td></tr>'; return; }
-  tb.innerHTML=DATA.tenants.map(t=>{
+  const sorted=[...DATA.tenants].sort((a,b)=>a.apartment-b.apartment);
+  tb.innerHTML=sorted.map(t=>{
     const extras=t.extraPersons||[];
     const allPersons=extras.length?extras.map(p=>`<span title="E-mail: ${p.email||'—'}\nTel: ${p.phone||'—'}" style="cursor:help">${p.name}</span>`).join(', '):(t.person2Name?`<span title="E-mail: ${t.person2Email||'—'}\nTel: ${t.person2Phone||'—'}" style="cursor:help">${t.person2Name}</span>`:'—');
     const contractBtn=t.contractPdf?`<button class="btn btn-sm btn-outline" onclick="viewTenantContract('${t.id}')">📄 Podgląd</button>`:'<span style="color:var(--text-light)">—</span>';
@@ -1885,104 +1886,113 @@ function renderPayments(){
 }
 function markPaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status='paid';i.paidDate=today();}saveData(DATA);renderPayments();renderDashboard();toast('Oznaczono jako opłacona');}
 function markUnpaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status=new Date(i.dueDate)<new Date()?'overdue':'pending';delete i.paidDate;}saveData(DATA);renderPayments();renderDashboard();toast('Cofnięto status');}
+function openGmail(to, subject, body){
+  const url=`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.open(url,'_blank');
+}
+
 function sendReminder(id){
   const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
   const t=DATA.tenants.find(x=>x.id===inv.tenantId);
   if(!t||!t.email){toast('Brak adresu e-mail najemcy — uzupełnij dane w zakładce Najemcy','error');return;}
-  const typeName=inv.type==='czynsz'?'czynsz':'media';
   const bankAcct=inv.bankAccount||'—';
-  const subject=encodeURIComponent(`Przypomnienie o płatności — ${inv.number}`);
-  const body=encodeURIComponent(
-`Szanowny/a ${t.name},
+  openGmail(t.email,
+    `Przypomnienie o płatności — faktura ${inv.number}`,
+`Szanowna Pani / Szanowny Panie,
 
-Uprzejmie przypominamy o zaległej płatności za fakturę:
+uprzejmie przypominam o nieuregulowanej płatności za fakturę nr ${inv.number}.
 
-Nr faktury: ${inv.number}
-Typ: ${typeName}
-Kwota: ${fmtN(inv.amountGross)} zł
+Kwota do zapłaty: ${fmtN(inv.amountGross)} zł
 Termin płatności: ${inv.dueDate}
 
-Prosimy o dokonanie wpłaty na konto:
+Proszę o dokonanie wpłaty na rachunek bankowy:
 ${bankAcct}
 
-W tytule przelewu prosimy o podanie numeru faktury.
+W tytule przelewu proszę wpisać numer faktury: ${inv.number}
+
+W razie pytań pozostaję do dyspozycji.
 
 Z poważaniem,
 ${DATA.owner.company}
-${DATA.owner.phone||''}
-${DATA.owner.email||''}`
+${DATA.owner.address||''}
+tel. ${DATA.owner.phone||''}
+e-mail: ${DATA.owner.email||''}`
   );
-  window.open(`mailto:${t.email}?subject=${subject}&body=${body}`,'_blank');
-  toast(`Otwarto e-mail do: ${t.email}`);
+  toast(`Otwarto Gmail — przypomnienie do: ${t.email}`);
 }
 
-function sendInvoiceEmail(id){
+async function sendInvoiceEmail(id){
   const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
   const t=DATA.tenants.find(x=>x.id===inv.tenantId);
   if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
-  const typeName=inv.type==='czynsz'?'czynsz':'media';
-  const itemsList=inv.items?inv.items.map(it=>`- ${it.name}: ${fmtN(it.qty)} ${it.unit} × ${fmtN(it.priceNet)} zł = ${fmtN(it.totalNet)} zł`).join('\n'):'';
-  const subject=encodeURIComponent(`Faktura ${inv.number} — ${typeName}`);
-  const body=encodeURIComponent(
-`Szanowny/a ${t.name},
+  // 1. Pobierz PDF faktury
+  await downloadPDF(id);
+  // 2. Otwórz Gmail compose
+  const [yr,mo]=inv.date.split('-');
+  const monthNames=['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
+  const monthLabel=monthNames[parseInt(mo)-1]+' '+yr;
+  openGmail(t.email,
+    `Faktura za czynsz nr ${inv.number} — ${monthLabel} — lokal M${t.apartment}`,
+`Szanowna Pani / Szanowny Panie,
 
-W załączeniu przesyłamy fakturę za ${typeName}:
+w załączeniu przesyłam fakturę nr ${inv.number} za czynsz najmu lokalu mieszkalnego M${t.apartment} przy Al. Brzozowej 77, 89-600 Chojnice za miesiąc ${monthLabel}.
 
-Nr faktury: ${inv.number}
-Data wystawienia: ${inv.date}
+Kwota do zapłaty: ${fmtN(inv.amountGross)} zł
 Termin płatności: ${inv.dueDate}
 
-${itemsList}
-
-Do zapłaty: ${fmtN(inv.amountGross)} zł
-
-Nr konta do wpłaty:
+Numer rachunku bankowego do wpłaty:
 ${inv.bankAccount||'—'}
 
-W tytule przelewu prosimy o podanie numeru faktury.
+W tytule przelewu proszę wpisać numer faktury: ${inv.number}
+
+W razie pytań pozostaję do dyspozycji.
 
 Z poważaniem,
 ${DATA.owner.company}
 ${DATA.owner.address||''}
 tel. ${DATA.owner.phone||''}
-${DATA.owner.email||''}`
+e-mail: ${DATA.owner.email||''}`
   );
-  window.open(`mailto:${t.email}?subject=${subject}&body=${body}`,'_blank');
-  toast(`Otwarto e-mail z fakturą do: ${t.email}`);
+  toast(`PDF pobrany — załącz go do wiadomości w Gmailu`,'info');
 }
 
-function sendSettlementEmail(id){
+async function sendSettlementEmail(id){
   const s=DATA.settlements.find(x=>x.id===id); if(!s)return;
   const t=DATA.tenants.find(x=>x.id===s.tenantId);
   if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
-  const mediaList=s.mediaItems.map(m=>`- ${ML[m.type]}: ${fmtN(m.consumption)} ${m.unit} × ${fmtN(m.rate)} zł = ${fmtN(m.cost)} zł`).join('\n');
-  const sewageLine=s.sewageCost?`- Ścieki: ${fmtN(s.sewageVolume)} m³ × ${fmtN(s.sewageRate)} zł = ${fmtN(s.sewageCost)} zł`:'';
-  const hwLine=s.hotWaterHeatingCost?`- Podgrzanie wody: ${fmtN(s.hotWaterHeatingVolume)} m³ × ${fmtN(s.hotWaterHeatingRate)} zł = ${fmtN(s.hotWaterHeatingCost)} zł`:'';
-  const garbageLine=`- Wywóz śmieci: ${s.garbagePersons} os. × ${fmtN(s.garbageRate)} zł = ${fmtN(s.garbageCost)} zł`;
-  const subject=encodeURIComponent(`Rozliczenie mediów M${s.apartment} — ${s.monthLabel}`);
-  const body=encodeURIComponent(
-`Szanowny/a ${t.name},
+  // 1. Pobierz PDF rozliczenia
+  await exportSettlementPDF(id);
+  // 2. Otwórz Gmail compose
+  const mediaList=s.mediaItems.map(m=>`• ${ML[m.type]}: ${fmtN(m.consumption)} ${m.unit} x ${fmtN(m.rate)} zł = ${fmtN(m.cost)} zł`).join('\n');
+  const sewageLine=s.sewageCost?`• Ścieki: ${fmtN(s.sewageVolume)} m³ x ${fmtN(s.sewageRate)} zł = ${fmtN(s.sewageCost)} zł`:'';
+  const hwLine=s.hotWaterHeatingCost?`• Podgrzanie wody: ${fmtN(s.hotWaterHeatingVolume)} m³ x ${fmtN(s.hotWaterHeatingRate)} zł = ${fmtN(s.hotWaterHeatingCost)} zł`:'';
+  const garbageLine=`• Wywóz śmieci: ${s.garbagePersons} os. x ${fmtN(s.garbageRate)} zł = ${fmtN(s.garbageCost)} zł`;
+  openGmail(t.email,
+    `Rozliczenie mediów — ${s.monthLabel} — lokal M${s.apartment}`,
+`Szanowna Pani / Szanowny Panie,
 
-Przesyłamy rozliczenie mediów za ${s.monthLabel} dla lokalu M${s.apartment}:
+w załączeniu przesyłam rozliczenie zużycia mediów za miesiąc ${s.monthLabel} dla lokalu M${s.apartment} przy Al. Brzozowej 77, 89-600 Chojnice.
 
+Zestawienie kosztów:
 ${mediaList}
-${sewageLine}
-${hwLine}
-${garbageLine}
+${sewageLine?sewageLine+'\n':''}${hwLine?hwLine+'\n':''}${garbageLine}
 
-MEDIA RAZEM: ${fmtN(s.totalAll)} zł
+Łączny koszt mediów: ${fmtN(s.totalAll)} zł
 
-Nr konta do wpłaty:
+Numer rachunku bankowego do wpłaty:
 ${DATA.owner.bank2||DATA.owner.bank1||'—'}
+
+Szczegółowe rozliczenie z odczytami liczników znajduje się w załączonym pliku PDF.
+
+W razie pytań pozostaję do dyspozycji.
 
 Z poważaniem,
 ${DATA.owner.company}
 ${DATA.owner.address||''}
 tel. ${DATA.owner.phone||''}
-${DATA.owner.email||''}`
+e-mail: ${DATA.owner.email||''}`
   );
-  window.open(`mailto:${t.email}?subject=${subject}&body=${body}`,'_blank');
-  toast(`Otwarto e-mail z rozliczeniem do: ${t.email}`);
+  toast(`PDF pobrany — załącz go do wiadomości w Gmailu`,'info');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2302,9 +2312,10 @@ function deleteSettlement(){
   toast('Rozliczenie usunięte');
 }
 
-async function exportSettlementPDF(){
-  if(!viewingSettleId) return;
-  const s=DATA.settlements.find(x=>x.id===viewingSettleId);
+async function exportSettlementPDF(settleId){
+  const sid=settleId||viewingSettleId;
+  if(!sid) return;
+  const s=DATA.settlements.find(x=>x.id===sid);
   if(!s) return;
 
   const doc=await createPdfDoc({unit:'mm',format:'a4'});
