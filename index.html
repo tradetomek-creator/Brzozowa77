@@ -2158,13 +2158,13 @@ function renderSettlementPreview(){
 function renderSettlementCard(s, compact=false){
   const mediaRows=s.mediaItems.map(m=>`
     <tr>
-      <td>${MI[m.type]} ${ML[m.type]}</td>
-      <td style="font-size:0.85em;color:var(--text-light)">${m.serial||'—'}</td>
-      <td style="text-align:right">${fmtN(m.prevValue)}</td>
-      <td style="text-align:right">${fmtN(m.currValue)}</td>
-      <td style="text-align:right;font-weight:600">${fmtN(m.consumption)} ${m.unit}</td>
-      <td style="text-align:right">${fmtN(m.rate)} zł/${m.unit}</td>
-      <td style="text-align:right;font-weight:600">${fmt(m.cost)}</td>
+      <td style="white-space:nowrap">${MI[m.type]} ${ML[m.type]}</td>
+      <td style="font-size:0.85em;color:var(--text-light);white-space:nowrap">${m.serial||'—'}</td>
+      <td style="text-align:right;white-space:nowrap">${fmtN(m.prevValue)}</td>
+      <td style="text-align:right;white-space:nowrap">${fmtN(m.currValue)}</td>
+      <td style="text-align:right;font-weight:600;white-space:nowrap">${fmtN(m.consumption)} ${m.unit}</td>
+      <td style="text-align:right;white-space:nowrap">${fmtN(m.rate)} zł/${m.unit}</td>
+      <td style="text-align:right;font-weight:600;white-space:nowrap">${fmt(m.cost)}</td>
     </tr>
   `).join('');
 
@@ -2188,22 +2188,22 @@ function renderSettlementCard(s, compact=false){
           <tbody>
             ${mediaRows}
             <tr style="background:var(--primary-bg)">
-              <td>🚿 Ścieki</td><td></td><td></td><td></td>
-              <td style="text-align:right">${fmtN(s.sewageVolume||0)} m³</td>
-              <td style="text-align:right">${fmtN(s.sewageRate||0)} zł/m³</td>
-              <td style="text-align:right;font-weight:600">${fmt(s.sewageCost||0)}</td>
+              <td style="white-space:nowrap">🚿 Ścieki</td><td></td><td></td><td></td>
+              <td style="text-align:right;white-space:nowrap">${fmtN(s.sewageVolume||0)} m³</td>
+              <td style="text-align:right;white-space:nowrap">${fmtN(s.sewageRate||0)} zł/m³</td>
+              <td style="text-align:right;font-weight:600;white-space:nowrap">${fmt(s.sewageCost||0)}</td>
             </tr>
             <tr style="background:var(--primary-bg)">
-              <td>🔥 Podgrzanie wody</td><td></td><td></td><td></td>
-              <td style="text-align:right">${fmtN(s.hotWaterHeatingVolume||0)} m³</td>
-              <td style="text-align:right">${fmtN(s.hotWaterHeatingRate||0)} zł/m³</td>
-              <td style="text-align:right;font-weight:600">${fmt(s.hotWaterHeatingCost||0)}</td>
+              <td style="white-space:nowrap">🔥 Podgrzanie wody</td><td></td><td></td><td></td>
+              <td style="text-align:right;white-space:nowrap">${fmtN(s.hotWaterHeatingVolume||0)} m³</td>
+              <td style="text-align:right;white-space:nowrap">${fmtN(s.hotWaterHeatingRate||0)} zł/m³</td>
+              <td style="text-align:right;font-weight:600;white-space:nowrap">${fmt(s.hotWaterHeatingCost||0)}</td>
             </tr>
             <tr style="background:var(--primary-bg)">
-              <td>🗑️ Wywóz śmieci</td><td></td><td></td><td></td>
-              <td style="text-align:right">${s.garbagePersons} os.</td>
-              <td style="text-align:right">${fmtN(s.garbageRate)} zł/os.</td>
-              <td style="text-align:right;font-weight:600">${fmt(s.garbageCost)}</td>
+              <td style="white-space:nowrap">🗑️ Wywóz śmieci</td><td></td><td></td><td></td>
+              <td style="text-align:right;white-space:nowrap">${s.garbagePersons} os.</td>
+              <td style="text-align:right;white-space:nowrap">${fmtN(s.garbageRate)} zł/os.</td>
+              <td style="text-align:right;font-weight:600;white-space:nowrap">${fmt(s.garbageCost)}</td>
             </tr>
           </tbody>
           <tfoot>
@@ -2333,7 +2333,8 @@ async function exportSettlementPDF(settleId){
   // Owner info
   doc.setFontSize(9);
   doc.text('Wynajmujący:',lm,y);
-  doc.text(`${DATA.owner.company} \u2022 ${DATA.owner.name}`,lm+28,y);y+=5;
+  const ownerLabel=DATA.owner.company&&DATA.owner.name&&DATA.owner.company!==DATA.owner.name?`${DATA.owner.company} \u2022 ${DATA.owner.name}`:DATA.owner.company||DATA.owner.name||'—';
+  doc.text(ownerLabel,lm+28,y);y+=5;
   doc.text(`${DATA.owner.address}`,lm+28,y);y+=5;
   if(DATA.owner.nip) {doc.text(`PESEL: ${DATA.owner.nip}`,lm+28,y);y+=5;}
 
@@ -2391,10 +2392,8 @@ async function exportSettlementPDF(settleId){
   doc.text('MEDIA RAZEM:',cols[3],y);doc.text(`${fmtN(s.totalAll)} zł`,cols[5],y);
   y+=12;
 
-  // Rates footnote
-  doc.setFontSize(7);doc.setTextColor(120,120,120);
-  doc.text(`Stawki: Woda zimna ${s.rates?.cold_water} zł/m³ | Woda ciepła ${s.rates?.hot_water} zł/m³ | Ogrzewanie ${s.rates?.heating} zł/GJ | Energia ${s.rates?.electricity} zł/kWh | Śmieci ${s.rates?.garbage} zł/os.`,lm,y);
   y+=4;
+  doc.setFontSize(7);doc.setTextColor(120,120,120);
   doc.text(`Wygenerowano: ${new Date(s.createdAt).toLocaleString('pl-PL')}`,lm,y);
   doc.setTextColor(0,0,0);
 
