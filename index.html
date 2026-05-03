@@ -721,16 +721,16 @@ let gmailAccessToken=null;
 
 function handleAuth(){
   if(firebaseUser){
-    // Logout
     if(!confirm('Wylogować się? Dane lokalne zostaną zachowane.')) return;
     gmailAccessToken=null;
     firebase.auth().signOut();
   } else {
-    // Login with Google + Gmail send scope
     const provider=new firebase.auth.GoogleAuthProvider();
     provider.addScope('https://www.googleapis.com/auth/gmail.send');
     firebase.auth().signInWithPopup(provider).then(result=>{
-      if(result.credential) gmailAccessToken=result.credential.accessToken;
+      if(result.credential&&result.credential.accessToken){
+        gmailAccessToken=result.credential.accessToken;
+      }
     }).catch(err=>{
       if(err.code==='auth/popup-closed-by-user') return;
       toast('Błąd logowania: '+err.message,'error');
@@ -738,21 +738,35 @@ function handleAuth(){
   }
 }
 
-// Refresh Gmail token — call FIRST (directly from user click) before any async work
+// Pobierz token Gmail — reauth na aktualnym użytkowniku (zachowuje sesję Firebase)
 async function getGmailToken(){
   if(gmailAccessToken) return gmailAccessToken;
-  // Token missing — need re-auth with popup (must be called directly from user click)
+  if(!firebaseUser){toast('Zaloguj się aby wysyłać e-maile','error');return null;}
   const provider=new firebase.auth.GoogleAuthProvider();
   provider.addScope('https://www.googleapis.com/auth/gmail.send');
   try{
-    const result=await firebase.auth().signInWithPopup(provider);
-    if(result.credential) gmailAccessToken=result.credential.accessToken;
-    return gmailAccessToken;
+    const result=await firebaseUser.reauthenticateWithPopup(provider);
+    if(result.credential&&result.credential.accessToken){
+      gmailAccessToken=result.credential.accessToken;
+      return gmailAccessToken;
+    }
+    toast('Nie uzyskano tokena Gmail — spróbuj ponownie','error');
+    return null;
   }catch(e){
-    if(e.code==='auth/popup-blocked'){
-      toast('Popup zablokowany — wyloguj się i zaloguj ponownie','error');
-    } else if(e.code!=='auth/popup-closed-by-user'){
-      toast('Nie udało się uzyskać dostępu do Gmaila. Wyloguj się i zaloguj ponownie.','error');
+    if(e.code==='auth/popup-closed-by-user') return null;
+    if(e.code==='auth/user-mismatch'){
+      // Użytkownik wybrał inne konto — spróbuj signInWithPopup
+      try{
+        const result2=await firebase.auth().signInWithPopup(provider);
+        if(result2.credential&&result2.credential.accessToken){
+          gmailAccessToken=result2.credential.accessToken;
+          return gmailAccessToken;
+        }
+      }catch(e2){
+        if(e2.code!=='auth/popup-closed-by-user') toast('Błąd Gmail: '+e2.message,'error');
+      }
+    } else {
+      toast('Błąd autoryzacji Gmail: '+e.message,'error');
     }
     return null;
   }
