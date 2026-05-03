@@ -738,10 +738,10 @@ function handleAuth(){
   }
 }
 
-// Refresh Gmail token if needed
+// Refresh Gmail token — call FIRST (directly from user click) before any async work
 async function getGmailToken(){
   if(gmailAccessToken) return gmailAccessToken;
-  // Re-auth to get fresh token with gmail scope
+  // Token missing — need re-auth with popup (must be called directly from user click)
   const provider=new firebase.auth.GoogleAuthProvider();
   provider.addScope('https://www.googleapis.com/auth/gmail.send');
   try{
@@ -749,14 +749,18 @@ async function getGmailToken(){
     if(result.credential) gmailAccessToken=result.credential.accessToken;
     return gmailAccessToken;
   }catch(e){
-    toast('Nie udało się uzyskać dostępu do Gmaila. Zaloguj się ponownie.','error');
+    if(e.code==='auth/popup-blocked'){
+      toast('Popup zablokowany — wyloguj się i zaloguj ponownie','error');
+    } else if(e.code!=='auth/popup-closed-by-user'){
+      toast('Nie udało się uzyskać dostępu do Gmaila. Wyloguj się i zaloguj ponownie.','error');
+    }
     return null;
   }
 }
 
 // Send email via Gmail API with PDF attachment
 async function sendGmailWithPDF(to, subject, bodyText, pdfBlob, pdfFilename){
-  const token=await getGmailToken();
+  const token=gmailAccessToken;
   if(!token){toast('Brak tokena Gmail — wyloguj się i zaloguj ponownie','error');return false;}
 
   // Convert PDF blob to base64
@@ -1987,11 +1991,14 @@ async function sendReminder(id){
   const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
   const t=DATA.tenants.find(x=>x.id===inv.tenantId);
   if(!t||!t.email){toast('Brak adresu e-mail najemcy — uzupełnij dane w zakładce Najemcy','error');return;}
-  const bankAcct=inv.bankAccount||'—';
-  // Generuj PDF faktury jako załącznik
+  // WAŻNE: token NAJPIERW (bezpośrednio z kliknięcia użytkownika — popup nie będzie zablokowany)
+  const token=await getGmailToken();
+  if(!token) return;
+  // Teraz generuj PDF (async — ale popup już nie potrzebny)
   toast('Przygotowuję przypomnienie...','info');
   const pdfBlob=await downloadPDF(id, true);
   const pdfName=inv.number.replace(/\//g,'-')+'.pdf';
+  const bankAcct=inv.bankAccount||'—';
   const subject=`Przypomnienie o płatności — faktura ${inv.number}`;
   const body=`Szanowna Pani / Szanowny Panie,
 
@@ -2019,7 +2026,6 @@ e-mail: ${DATA.owner.email||''}`;
     await sendGmailWithPDF(t.email, subject, body, pdfBlob, pdfName);
   } else {
     openGmail(t.email, subject, body);
-    toast('Nie udało się wygenerować PDF — e-mail bez załącznika','error');
   }
 }
 
@@ -2027,7 +2033,10 @@ async function sendInvoiceEmail(id){
   const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
   const t=DATA.tenants.find(x=>x.id===inv.tenantId);
   if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
-
+  // WAŻNE: token NAJPIERW (bezpośrednio z kliknięcia — popup nie zablokowany)
+  const token=await getGmailToken();
+  if(!token) return;
+  // Teraz generuj PDF
   toast('Generuję fakturę i wysyłam e-mail...','info');
   const pdfBlob=await downloadPDF(id, true);
   const pdfName=inv.number.replace(/\//g,'-')+'.pdf';
@@ -2061,7 +2070,6 @@ e-mail: ${DATA.owner.email||''}`;
     await sendGmailWithPDF(t.email, subject, body, pdfBlob, pdfName);
   } else {
     openGmail(t.email, subject, body);
-    toast('Nie udało się wygenerować PDF — otwarto Gmail bez załącznika','error');
   }
 }
 
@@ -2069,7 +2077,10 @@ async function sendSettlementEmail(id){
   const s=DATA.settlements.find(x=>x.id===id); if(!s)return;
   const t=DATA.tenants.find(x=>x.id===s.tenantId);
   if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
-
+  // WAŻNE: token NAJPIERW (bezpośrednio z kliknięcia — popup nie zablokowany)
+  const token=await getGmailToken();
+  if(!token) return;
+  // Teraz generuj PDF
   toast('Generuję rozliczenie i wysyłam e-mail...','info');
   const pdfBlob=await exportSettlementPDF(id, true);
   const pdfName=`Rozliczenie-M${s.apartment}-${s.month}.pdf`;
@@ -2107,7 +2118,6 @@ e-mail: ${DATA.owner.email||''}`;
     await sendGmailWithPDF(t.email, subject, body, pdfBlob, pdfName);
   } else {
     openGmail(t.email, subject, body);
-    toast('Nie udało się wygenerować PDF — otwarto Gmail bez załącznika','error');
   }
 }
 
