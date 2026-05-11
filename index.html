@@ -2095,7 +2095,8 @@ function generateSettlement(){
         prevVal=meter.initialValue||0;
         currVal=prevVal;
       }
-      const consumption=Math.max(0, currVal-prevVal);
+      const rawConsumption=Math.max(0, currVal-prevVal);
+      const consumption=Math.round(rawConsumption*100)/100;
       const unitRate=rate(meter.type);
       const cost=Math.round(consumption*unitRate*100)/100;
       totalMedia+=cost;
@@ -2117,7 +2118,7 @@ function generateSettlement(){
     // Ścieki = (zużycie zimnej + ciepłej wody) × stawka
     const coldConsumption=mediaItems.find(m=>m.type==='cold_water')?.consumption||0;
     const hotConsumption=mediaItems.find(m=>m.type==='hot_water')?.consumption||0;
-    const sewageVolume=Math.round((coldConsumption+hotConsumption)*1000)/1000;
+    const sewageVolume=Math.round((coldConsumption+hotConsumption)*100)/100;
     const sewageRate=rate('sewage')||0;
     const sewageCost=Math.round(sewageVolume*sewageRate*100)/100;
     totalMedia+=sewageCost;
