@@ -126,7 +126,6 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
 .toast-error { background:var(--danger); }
 .toast-info { background:var(--primary); }
 @keyframes slideIn { from{transform:translateX(100%);opacity:0;} to{transform:translateX(0);opacity:1;} }
-@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
 
 /* RESPONSIVE */
 @media(max-width:768px){
@@ -169,7 +168,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="nav-tab" data-page="tenants">Najemcy</div>
       <div class="nav-tab" data-page="meters">Liczniki</div>
       <div class="nav-tab" data-page="readings">Odczyty</div>
-      <div class="nav-tab" data-page="invoices">Rachunki</div>
+      <div class="nav-tab" data-page="invoices">Faktury</div>
       <div class="nav-tab" data-page="settlements">Rozliczenia</div>
       <div class="nav-tab" data-page="payments">Płatności</div>
       <div class="nav-tab" data-page="settings">Ustawienia</div>
@@ -209,7 +208,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
     </div>
     <div class="card">
       <div class="table-wrap">
-        <table><thead><tr><th>Mieszkanie</th><th>Najemca (osoba 1)</th><th>Osoby</th><th>E-mail</th><th>Telefon</th><th>Osoba 2</th><th>Czynsz</th><th>Kaucja</th><th>Umowa do</th><th>Umowa PDF</th><th>Akcje</th></tr></thead>
+        <table><thead><tr><th>Mieszkanie</th><th>Najemca (osoba 1)</th><th>Osoby</th><th>E-mail</th><th>Telefon</th><th>Osoba 2</th><th>Czynsz</th><th>Umowa do</th><th>Umowa PDF</th><th>Akcje</th></tr></thead>
         <tbody id="tenants-tbody"></tbody></table>
       </div>
     </div>
@@ -222,12 +221,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
         Liczniki — Zestawienie
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <span id="meters-dirty-indicator" style="display:none;align-items:center;gap:6px;color:#f39c12;font-weight:600;font-size:0.9em;">
-          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f39c12;animation:pulse 1.5s infinite;"></span>
-          Niezapisane zmiany
-        </span>
-        <span id="meters-autosave-status" style="font-size:0.8em;color:#27ae60;opacity:0.5;transition:opacity 0.3s;">Auto-zapis aktywny</span>
+      <div style="display:flex;gap:8px;">
         <button class="btn btn-primary" onclick="openMeterModal()">+ Dodaj pojedynczo</button>
         <button class="btn btn-success" onclick="saveAllMeters()">Zapisz zestawienie</button>
       </div>
@@ -281,7 +275,13 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Odczyty liczników
       </div>
-      <button class="btn btn-primary" onclick="openReadingModal()">+ Ręczny odczyt</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="openMonthlyReadingModal()">📅 Wprowadź odczyty za miesiąc</button>
+        <button class="btn btn-outline" onclick="openHistoricalView()">🔍 Stan na koniec miesiąca</button>
+      </div>
+    </div>
+    <div class="card" style="background:#eef7ff;border-left:4px solid var(--primary-light);margin-bottom:16px">
+      <p style="margin:0;font-size:0.9em;color:var(--text)"><strong>Jak to działa:</strong> Pod koniec miesiąca kliknij <em>Wprowadź odczyty za miesiąc</em>, wybierz miesiąc rozliczeniowy i wpisz aktualne stany liczników dla wszystkich 8 lokali. Program automatycznie wyliczy zużycie i koszty na podstawie różnicy z odczytem poprzedniego miesiąca. <strong>Zapisane odczyty miesięczne są zablokowane przed przypadkową zmianą</strong> — żeby usunąć zamknięty miesiąc, musisz najpierw odblokować go w Ustawieniach.</p>
     </div>
     <div class="filters-row">
       <select class="filter-input" id="reading-month-filter" onchange="renderReadings()"></select>
@@ -289,34 +289,30 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
     </div>
     <div class="card">
       <div class="table-wrap">
-        <table><thead><tr><th>Data</th><th>Mieszkanie</th><th>Medium</th><th>Nr licznika</th><th>Odczyt poprz.</th><th>Odczyt akt.</th><th>Zużycie</th><th>Koszt</th><th>Źródło</th><th>Akcje</th></tr></thead>
+        <table><thead><tr><th>Data</th><th>Mieszkanie</th><th>Medium</th><th>Nr licznika</th><th>Odczyt poprz.</th><th>Odczyt akt.</th><th>Zużycie</th><th>Koszt</th><th>Źródło</th><th>Status</th><th>Akcje</th></tr></thead>
         <tbody id="readings-tbody"></tbody></table>
       </div>
     </div>
   </div>
 
-  <!-- ══════════ RACHUNKI ══════════ -->
+  <!-- ══════════ FAKTURY ══════════ -->
   <div class="page" id="page-invoices">
     <div class="card-header">
       <div class="section-title" style="margin-bottom:0">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        Rachunki
+        Faktury
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <select class="filter-input" id="invoice-apt-gen" style="width:auto;">
-          <option value="all">Wszystkie lokale</option>
-          <option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option>
-          <option value="5">M5</option><option value="6">M6</option><option value="7">M7</option><option value="8">M8</option>
-        </select>
-        <button class="btn btn-primary" onclick="generateMonthlyInvoices()">Generuj rachunki</button>
-      </div>
+      <button class="btn btn-primary" onclick="generateMonthlyInvoices()">Generuj faktury za miesiąc</button>
     </div>
     <div class="filters-row">
       <select class="filter-input" id="invoice-month-filter" onchange="renderInvoices()"></select>
+      <select class="filter-input" id="invoice-type-filter" onchange="renderInvoices()">
+        <option value="">Wszystkie typy</option><option value="czynsz">Czynsz</option><option value="media">Media</option>
+      </select>
     </div>
     <div class="card">
       <div class="table-wrap">
-        <table><thead><tr><th>Nr rachunku</th><th>Data</th><th>Najemca</th><th>Mieszkanie</th><th>Kwota brutto</th><th>Status</th><th>Akcje</th></tr></thead>
+        <table><thead><tr><th>Nr faktury</th><th>Data</th><th>Najemca</th><th>Mieszkanie</th><th>Typ</th><th>Kwota netto</th><th>Kwota brutto</th><th>Status</th><th>Akcje</th></tr></thead>
         <tbody id="invoices-tbody"></tbody></table>
       </div>
     </div>
@@ -385,7 +381,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
 
   <!-- SETTLEMENT DETAIL MODAL -->
   <div class="modal-overlay" id="settle-detail-modal">
-    <div class="modal" style="max-width:95vw;width:1100px">
+    <div class="modal" style="max-width:800px">
       <div class="modal-header">
         <div class="modal-title" id="settle-detail-title">Rozliczenie</div>
         <button class="modal-close" onclick="closeModal('settle-detail-modal')">&times;</button>
@@ -394,7 +390,6 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeModal('settle-detail-modal')">Zamknij</button>
         <button class="btn btn-danger" onclick="deleteSettlement()" style="margin-right:auto;">Usuń</button>
-        <button class="btn btn-success" onclick="sendSettlementEmail(viewingSettleId)">Wyślij e-mail</button>
         <button class="btn btn-primary" onclick="exportSettlementPDF()">Pobierz PDF</button>
       </div>
     </div>
@@ -408,7 +403,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
     <div class="stats-row" id="payment-stats"></div>
     <div class="card">
       <div class="table-wrap">
-        <table><thead><tr><th>Nr rachunku</th><th>Najemca</th><th>Kwota</th><th>Termin</th><th>Dni do/po</th><th>Status</th><th>Akcje</th></tr></thead>
+        <table><thead><tr><th>Nr faktury</th><th>Najemca</th><th>Typ</th><th>Kwota</th><th>Termin</th><th>Dni do/po</th><th>Status</th><th>Akcje</th></tr></thead>
         <tbody id="payments-tbody"></tbody></table>
       </div>
     </div>
@@ -428,16 +423,16 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
         <div class="form-group"><label class="form-label">Ciepła woda (zł/m³)</label><input type="number" step="0.01" class="form-input" id="rate-hot-water" value="28.00"></div>
         <div class="form-group"><label class="form-label">Ogrzewanie (zł/GJ)</label><input type="number" step="0.01" class="form-input" id="rate-heating" value="85.00"></div>
         <div class="form-group"><label class="form-label">Energia elektryczna (zł/kWh)</label><input type="number" step="0.01" class="form-input" id="rate-electricity" value="1.05"></div>
-        <div class="form-group"><label class="form-label">Ścieki (zł/m³)</label><input type="number" step="0.01" class="form-input" id="rate-sewage" value="19.70"></div>
-        <div class="form-group"><label class="form-label">Podgrzanie wody (zł/m³)</label><input type="number" step="0.01" class="form-input" id="rate-hot-water-heating" value="46.80"></div>
         <div class="form-group"><label class="form-label">Wywóz śmieci (zł/osobę/mies.)</label><input type="number" step="0.01" class="form-input" id="rate-garbage" value="35.00"></div>
+        <div class="form-group"><label class="form-label">Stawka VAT (%)</label><input type="number" step="1" class="form-input" id="rate-vat" value="23"></div>
         <button class="btn btn-primary btn-block" onclick="saveRates()">Zapisz stawki</button>
       </div>
 
       <div class="card">
         <div class="card-title" style="margin-bottom:16px">Dane właściciela / firmy</div>
-        <div class="form-group"><label class="form-label">Imię i nazwisko / Nazwa firmy</label><input type="text" class="form-input" id="owner-company" value="Joanna Słomska"></div>
-        <div class="form-group"><label class="form-label">PESEL</label><input type="text" class="form-input" id="owner-nip" placeholder="np. 83010512345"></div>
+        <div class="form-group"><label class="form-label">Nazwa firmy</label><input type="text" class="form-input" id="owner-company" value="EVENTUS sp. z o.o."></div>
+        <div class="form-group"><label class="form-label">Imię i nazwisko</label><input type="text" class="form-input" id="owner-name" value="Tomasz Słomski"></div>
+        <div class="form-group"><label class="form-label">NIP</label><input type="text" class="form-input" id="owner-nip"></div>
         <div class="form-group"><label class="form-label">Adres</label><input type="text" class="form-input" id="owner-address" value="Aleja Brzozowa 77, 89-600 Chojnice"></div>
         <div class="form-group"><label class="form-label">E-mail</label><input type="email" class="form-input" id="owner-email" value="tradetomek@gmail.com"></div>
         <div class="form-group"><label class="form-label">Telefon</label><input type="tel" class="form-input" id="owner-phone"></div>
@@ -473,21 +468,14 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="form-row">
         <div class="form-group"><label class="form-label">Mieszkanie nr</label><select class="form-input" id="tenant-apt"></select></div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Imię i nazwisko</label><input type="text" class="form-input" id="tenant-name" placeholder="Jan Kowalski"></div>
-        <div class="form-group"><label class="form-label">Nazwa firmy (opcjonalnie)</label><input type="text" class="form-input" id="tenant-company" placeholder="np. ABC sp. z o.o."></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">PESEL / NIP</label><input type="text" class="form-input" id="tenant-nip" placeholder="PESEL lub NIP firmy"></div>
-        <div class="form-group"><label class="form-label">Adres zamieszkania</label><input type="text" class="form-input" id="tenant-address" placeholder="ul. Kwiatowa 5, 89-600 Chojnice"></div>
-      </div>
+      <div class="form-group"><label class="form-label">Imię i nazwisko</label><input type="text" class="form-input" id="tenant-name" placeholder="Jan Kowalski"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">E-mail</label><input type="email" class="form-input" id="tenant-email"></div>
         <div class="form-group"><label class="form-label">Telefon</label><input type="tel" class="form-input" id="tenant-phone"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Czynsz (zł/mies.)</label><input type="number" step="0.01" class="form-input" id="tenant-rent" value="2000"></div>
-        <div class="form-group"><label class="form-label">Kaucja (zł)</label><input type="number" step="0.01" class="form-input" id="tenant-deposit" value="0"></div>
+        <div class="form-group"><label class="form-label">Czynsz netto (zł)</label><input type="number" step="0.01" class="form-input" id="tenant-rent" value="2000"></div>
+        <div class="form-group"><label class="form-label">NIP (opcjonalnie)</label><input type="text" class="form-input" id="tenant-nip"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Umowa od</label><input type="date" class="form-input" id="tenant-from"></div>
@@ -575,11 +563,59 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
   </div>
 </div>
 
+<!-- ODCZYTY MIESIĘCZNE — wszystkie liczniki M1-M8 jednym widokiem -->
+<div class="modal-overlay" id="monthly-reading-modal">
+  <div class="modal" style="max-width:1100px">
+    <div class="modal-header">
+      <div class="modal-title">📅 Odczyty miesięczne — wszystkie lokale</div>
+      <button class="modal-close" onclick="closeModal('monthly-reading-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Miesiąc rozliczeniowy</label>
+          <input type="month" class="form-input" id="monthly-period" onchange="loadMonthlyReadings()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data odczytu (zwykle ostatni dzień miesiąca)</label>
+          <input type="date" class="form-input" id="monthly-date">
+        </div>
+      </div>
+      <div id="monthly-status-banner" style="margin-bottom:12px"></div>
+      <div id="monthly-readings-form"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('monthly-reading-modal')">Anuluj</button>
+      <button class="btn btn-primary" id="monthly-save-btn" onclick="saveMonthlyReadings()">🔒 Zapisz i zamknij miesiąc</button>
+    </div>
+  </div>
+</div>
+
+<!-- WIDOK HISTORYCZNY — stan liczników na koniec wybranego miesiąca -->
+<div class="modal-overlay" id="historical-view-modal">
+  <div class="modal" style="max-width:1000px">
+    <div class="modal-header">
+      <div class="modal-title">🔍 Stan liczników na koniec miesiąca</div>
+      <button class="modal-close" onclick="closeModal('historical-view-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Wybierz miesiąc</label>
+        <input type="month" class="form-input" id="historical-period" onchange="loadHistoricalView()" style="max-width:300px">
+      </div>
+      <div id="historical-view-content"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('historical-view-modal')">Zamknij</button>
+    </div>
+  </div>
+</div>
+
 <!-- INVOICE DETAIL MODAL -->
 <div class="modal-overlay" id="invoice-detail-modal">
   <div class="modal" style="max-width:700px">
     <div class="modal-header">
-      <div class="modal-title" id="invoice-detail-title">Rachunek</div>
+      <div class="modal-title" id="invoice-detail-title">Faktura</div>
       <button class="modal-close" onclick="closeModal('invoice-detail-modal')">&times;</button>
     </div>
     <div class="modal-body" id="invoice-detail-body"></div>
@@ -609,7 +645,7 @@ const DEFAULT_DATA = {
   meters: [],
   readings: [],
   invoices: [],
-  rates: { cold_water:12.50, hot_water:28.00, heating:85.00, electricity:1.05, sewage:19.70, hot_water_heating:46.80, garbage:35.00, vat:0 },
+  rates: { cold_water:12.50, hot_water:28.00, heating:85.00, electricity:1.05, garbage:35.00, vat:23 },
   owner: { company:'EVENTUS sp. z o.o.', name:'Tomasz Słomski', nip:'', address:'Aleja Brzozowa 77, 89-600 Chojnice', email:'tradetomek@gmail.com', phone:'', bank1:'', bank2:'' },
   settlements: [],
   nextInvoiceNum: 1
@@ -620,8 +656,6 @@ function loadData() {
   catch(e){ return structuredClone(DEFAULT_DATA); }
 }
 function saveData(d){
-  // Stempel czasowy lokalny — używany do merge z chmurą (nowsza wersja wygrywa)
-  d.updatedAt = Date.now();
   localStorage.setItem(DB_KEY, JSON.stringify(d));
   // If logged in, sync to Firestore
   if(firebaseUser && db){
@@ -634,7 +668,7 @@ let DATA = loadData();
 // FIREBASE — SYNC & AUTH
 // ═══════════════════════════════════════════════════════════════
 const firebaseConfig={
-  apiKey:"AIzaSyD8qEwuLLCCXftMnCxrGOA8TdyL3UQg6Ow",
+  apiKey:"AIzaSyD8qEwuLCCXftMnCxrGOA8TdyL3UQg6Ow",
   authDomain:"brzozowa77-b3b9f.firebaseapp.com",
   projectId:"brzozowa77-b3b9f",
   storageBucket:"brzozowa77-b3b9f.firebasestorage.app",
@@ -656,20 +690,17 @@ try{
 
 function handleAuth(){
   if(firebaseUser){
+    // Logout
     if(!confirm('Wylogować się? Dane lokalne zostaną zachowane.')) return;
     firebase.auth().signOut();
   } else {
+    // Login with Google
     const provider=new firebase.auth.GoogleAuthProvider();
     firebase.auth().signInWithPopup(provider).catch(err=>{
       if(err.code==='auth/popup-closed-by-user') return;
       toast('Błąd logowania: '+err.message,'error');
     });
   }
-}
-
-function openGmail(to, subject, body){
-  const url=`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  window.open(url,'_blank');
 }
 
 // Auth state listener
@@ -702,50 +733,19 @@ async function loadFromFirestore(){
       const cloudData=doc.data().appData;
       if(cloudData){
         isSyncingFromCloud=true;
-        // === MERGE — nowsza wersja wygrywa, lokalne dane nigdy nie giną ===
-        const localTs = DATA.updatedAt || 0;
-        const cloudTs = cloudData.updatedAt || 0;
-
-        // Zachowaj lokalne PDFy umów (zbyt duże dla Firestore)
+        // Merge: cloud data wins, but keep local contract PDFs (too big for Firestore)
         const localContracts={};
         DATA.tenants.forEach(t=>{if(t.contractPdf) localContracts[t.id]=t.contractPdf;});
 
-        if(cloudTs > localTs){
-          // Chmura nowsza — używamy chmury
-          DATA={...structuredClone(DEFAULT_DATA),...cloudData};
-          DATA.tenants.forEach(t=>{
-            if(!t.contractPdf && localContracts[t.id]) t.contractPdf=localContracts[t.id];
-          });
-          localStorage.setItem(DB_KEY, JSON.stringify(DATA));
-          toast('Dane zsynchronizowane z chmury','success');
-        } else if(localTs > cloudTs){
-          // Lokalne nowsze — wypchnij do chmury (NIE nadpisuj lokalnych!)
-          isSyncingFromCloud=false;
-          syncToFirestore(DATA);
-          toast('Wysłano lokalne zmiany do chmury','success');
-          isSyncingFromCloud=true;
-        } else {
-          // Identyczne timestamp lub oba=0 — sprawdź zawartość
-          const localCmp={...DATA}; delete localCmp.updatedAt;
-          const cloudCmp={...cloudData}; delete cloudCmp.updatedAt;
-          localCmp.tenants=(localCmp.tenants||[]).map(t=>{const c={...t};delete c.contractPdf;return c;});
-          if(JSON.stringify(localCmp)!==JSON.stringify(cloudCmp)){
-            // Konflikt bez znaczników czasu — preferuj większą bazę (więcej rekordów wygrywa)
-            const localCount=(DATA.meters?.length||0)+(DATA.readings?.length||0)+(DATA.tenants?.length||0);
-            const cloudCount=(cloudData.meters?.length||0)+(cloudData.readings?.length||0)+(cloudData.tenants?.length||0);
-            if(cloudCount>localCount){
-              DATA={...structuredClone(DEFAULT_DATA),...cloudData};
-              DATA.tenants.forEach(t=>{if(!t.contractPdf && localContracts[t.id]) t.contractPdf=localContracts[t.id];});
-              localStorage.setItem(DB_KEY, JSON.stringify(DATA));
-              toast('Pobrano nowszą wersję z chmury','success');
-            } else {
-              isSyncingFromCloud=false;
-              syncToFirestore(DATA);
-              isSyncingFromCloud=true;
-            }
-          }
-        }
-        // Odśwież widoczną stronę
+        DATA={...structuredClone(DEFAULT_DATA),...cloudData};
+        // Restore contract PDFs from local
+        DATA.tenants.forEach(t=>{
+          if(!t.contractPdf && localContracts[t.id]) t.contractPdf=localContracts[t.id];
+        });
+
+        localStorage.setItem(DB_KEY, JSON.stringify(DATA));
+        toast('Dane zsynchronizowane z chmury','success');
+        // Refresh current page
         const activePage=document.querySelector('.nav-tab.active');
         if(activePage) refresh(activePage.dataset.page);
         isSyncingFromCloud=false;
@@ -766,62 +766,28 @@ function syncToFirestore(d){
   if(!firebaseUser||!db||isSyncingFromCloud) return;
   // Debounce — save max every 2 seconds
   clearTimeout(syncTimeout);
-  syncTimeout=setTimeout(()=>{ doFirestoreSync(d); },2000);
-}
+  syncTimeout=setTimeout(async()=>{
+    try{
+      // Strip contract PDFs (base64, too large for Firestore 1MB doc limit)
+      const dataToSync=JSON.parse(JSON.stringify(d));
+      dataToSync.tenants.forEach(t=>{delete t.contractPdf;});
 
-// Wewnętrzny zapis — używany przez debounce ORAZ przez flush przy zamknięciu
-async function doFirestoreSync(d){
-  if(!firebaseUser||!db) return;
-  try{
-    const dataToSync=JSON.parse(JSON.stringify(d));
-    dataToSync.tenants.forEach(t=>{delete t.contractPdf;});
+      await db.collection('users').doc(firebaseUser.uid).set({
+        appData:dataToSync,
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+        email:firebaseUser.email
+      },{merge:true});
 
-    await db.collection('users').doc(firebaseUser.uid).set({
-      appData:dataToSync,
-      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      email:firebaseUser.email
-    },{merge:true});
-
-    const ind=document.getElementById('sync-indicator');
-    if(ind){ ind.textContent='Sync ✓';ind.style.background='#27ae60'; setTimeout(()=>{ind.textContent='Sync';},2000); }
-  }catch(e){
-    console.error('Firestore save error:',e);
-    const ind=document.getElementById('sync-indicator');
-    if(ind){ ind.textContent='Sync ✗';ind.style.background='#e74c3c'; }
-  }
-}
-
-// === FLUSH PRZY ZAMYKANIU OKNA ===
-// Jeśli są niezapisane dane (debounce nie zdążył) — wymuś natychmiastowy zapis.
-window.addEventListener('beforeunload', (ev)=>{
-  // 1) Wymuś auto-zapis tabeli liczników jeśli są niezapisane edycje
-  if(typeof metersDirty!=='undefined' && metersDirty){
-    try{ saveAllMeters({silent:true}); }catch(e){}
-  }
-  // 2) Wymuś natychmiastową synchronizację do Firestore (bez debounce)
-  if(firebaseUser && db && syncTimeout){
-    clearTimeout(syncTimeout);
-    // sendBeacon / fire-and-forget — beforeunload nie czeka na async
-    doFirestoreSync(DATA);
-    // Pokaż ostrzeżenie tylko jeśli realnie coś nie zostało wysłane
-    ev.preventDefault();
-    ev.returnValue='Trwa zapis do chmury — poczekaj chwilę przed zamknięciem.';
-    return ev.returnValue;
-  }
-});
-
-// Dodatkowo: zapis przy ukryciu karty (mobile, przełączenie aplikacji)
-document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState==='hidden'){
-    if(typeof metersDirty!=='undefined' && metersDirty){
-      try{ saveAllMeters({silent:true}); }catch(e){}
+      const ind=document.getElementById('sync-indicator');
+      ind.textContent='Sync ✓';ind.style.background='#27ae60';
+      setTimeout(()=>{ind.textContent='Sync';},2000);
+    }catch(e){
+      console.error('Firestore save error:',e);
+      const ind=document.getElementById('sync-indicator');
+      ind.textContent='Sync ✗';ind.style.background='#e74c3c';
     }
-    if(firebaseUser && db && syncTimeout){
-      clearTimeout(syncTimeout);
-      doFirestoreSync(DATA);
-    }
-  }
-});
+  },2000);
+}
 
 // Listen for real-time changes from other devices
 if(db){
@@ -831,11 +797,7 @@ if(db){
         if(!doc.exists||isSyncingFromCloud) return;
         const cloudData=doc.data()?.appData;
         if(!cloudData) return;
-        // === Akceptuj zmiany z innego urządzenia TYLKO jeśli są nowsze ===
-        const cloudTs=cloudData.updatedAt||0;
-        const localTs=DATA.updatedAt||0;
-        if(cloudTs<=localTs) return; // lokalne nowsze lub równe — ignoruj
-
+        // Check if cloud data is newer (compare updatedAt or just always merge)
         const cloudStr=JSON.stringify(cloudData);
         const localCopy=JSON.parse(JSON.stringify(DATA));
         localCopy.tenants.forEach(t=>{delete t.contractPdf;});
@@ -876,7 +838,6 @@ function fmtN(n){ return Number(n).toFixed(2).replace('.',','); }
 function genId(){ return Date.now().toString(36)+Math.random().toString(36).substr(2,5); }
 function today(){ return new Date().toISOString().split('T')[0]; }
 function curMonth(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
-function prevMonth(){ const d=new Date(); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
 function toast(msg,type='success'){ const e=document.createElement('div'); e.className=`toast toast-${type}`; e.textContent=msg; document.getElementById('toasts').appendChild(e); setTimeout(()=>e.remove(),4000); }
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
@@ -979,7 +940,7 @@ function renderDashboard(){
   }
   document.getElementById('dashboard-tiles').innerHTML=h;
 }
-function goToApt(n){ const t=getTenant(n); if(t){switchPage('tenants');setTimeout(()=>editTenant(t.id),100);} else openTenantModal(null,n); }
+function goToApt(n){ getTenant(n)?switchPage('readings'):openTenantModal(null,n); }
 
 // ═══════════════════════════════════════════════════════════════
 // TENANTS
@@ -987,13 +948,12 @@ function goToApt(n){ const t=getTenant(n); if(t){switchPage('tenants');setTimeou
 function renderTenants(){
   const tb=document.getElementById('tenants-tbody');
   if(!DATA.tenants.length){ tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-light)">Brak najemców.</td></tr>'; return; }
-  const sorted=[...DATA.tenants].sort((a,b)=>a.apartment-b.apartment);
-  tb.innerHTML=sorted.map(t=>{
+  tb.innerHTML=DATA.tenants.map(t=>{
     const extras=t.extraPersons||[];
     const allPersons=extras.length?extras.map(p=>`<span title="E-mail: ${p.email||'—'}\nTel: ${p.phone||'—'}" style="cursor:help">${p.name}</span>`).join(', '):(t.person2Name?`<span title="E-mail: ${t.person2Email||'—'}\nTel: ${t.person2Phone||'—'}" style="cursor:help">${t.person2Name}</span>`:'—');
     const contractBtn=t.contractPdf?`<button class="btn btn-sm btn-outline" onclick="viewTenantContract('${t.id}')">📄 Podgląd</button>`:'<span style="color:var(--text-light)">—</span>';
     return `<tr>
-    <td><strong>M${t.apartment}</strong></td><td>${t.name}${t.company?'<br><small style="color:var(--text-light)">'+t.company+'</small>':''}</td><td>${t.persons||1}</td><td>${t.email||'—'}</td><td>${t.phone||'—'}</td><td>${allPersons}</td><td>${fmt(t.rent)}</td><td>${fmt(t.deposit||0)}</td><td>${t.contractTo||'—'}</td>
+    <td><strong>M${t.apartment}</strong></td><td>${t.name}</td><td>${t.persons||1}</td><td>${t.email||'—'}</td><td>${t.phone||'—'}</td><td>${allPersons}</td><td>${fmt(t.rent)}</td><td>${t.contractTo||'—'}</td>
     <td>${contractBtn}</td>
     <td><button class="btn btn-sm btn-outline" onclick="editTenant('${t.id}')">Edytuj</button> <button class="btn btn-sm btn-danger" onclick="deleteTenant('${t.id}')">Usuń</button></td>
   </tr>`;}).join('');
@@ -1012,11 +972,9 @@ function openTenantModal(id,pre){
 
   if(id){ const t=DATA.tenants.find(x=>x.id===id); document.getElementById('tenant-modal-title').textContent='Edytuj najemcę';
     document.getElementById('tenant-id').value=id; document.getElementById('tenant-apt').value=t.apartment;
-    document.getElementById('tenant-name').value=t.name; document.getElementById('tenant-company').value=t.company||'';
-    document.getElementById('tenant-nip').value=t.nip||''; document.getElementById('tenant-address').value=t.address||'';
-    document.getElementById('tenant-email').value=t.email||'';
+    document.getElementById('tenant-name').value=t.name; document.getElementById('tenant-email').value=t.email||'';
     document.getElementById('tenant-phone').value=t.phone||''; document.getElementById('tenant-rent').value=t.rent;
-    document.getElementById('tenant-deposit').value=t.deposit||0;
+    document.getElementById('tenant-nip').value=t.nip||'';
     document.getElementById('tenant-from').value=t.contractFrom||''; document.getElementById('tenant-to').value=t.contractTo||'';
     // Contract PDF
     if(t.contractPdf){
@@ -1034,8 +992,8 @@ function openTenantModal(id,pre){
     extras.forEach(p=>addExtraPerson(p));
     updatePersonsCount();
   } else { document.getElementById('tenant-modal-title').textContent='Dodaj najemcę'; document.getElementById('tenant-id').value='';
-    ['tenant-name','tenant-company','tenant-nip','tenant-address','tenant-email','tenant-phone'].forEach(x=>document.getElementById(x).value='');
-    document.getElementById('tenant-rent').value='2000'; document.getElementById('tenant-deposit').value='0';
+    ['tenant-name','tenant-email','tenant-phone','tenant-nip'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('tenant-rent').value='2000';
     document.getElementById('tenant-from').value=today(); document.getElementById('tenant-to').value='';
     clearExtraPersons(); updatePersonsCount();
   }
@@ -1139,11 +1097,9 @@ function saveTenant(){
   const extraPersons=getExtraPersons();
   const persons=1+extraPersons.length;
   const o={id:id||genId(), apartment:+document.getElementById('tenant-apt').value,
-    name:document.getElementById('tenant-name').value.trim(), company:document.getElementById('tenant-company').value.trim(),
-    nip:document.getElementById('tenant-nip').value.trim(), address:document.getElementById('tenant-address').value.trim(),
-    email:document.getElementById('tenant-email').value.trim(),
+    name:document.getElementById('tenant-name').value.trim(), email:document.getElementById('tenant-email').value.trim(),
     phone:document.getElementById('tenant-phone').value.trim(), rent:parseFloat(document.getElementById('tenant-rent').value)||0,
-    deposit:parseFloat(document.getElementById('tenant-deposit').value)||0, persons:persons,
+    nip:document.getElementById('tenant-nip').value.trim(), persons:persons,
     contractFrom:document.getElementById('tenant-from').value, contractTo:document.getElementById('tenant-to').value,
     contractPdf:pendingContractData||null, contractFileName:pendingContractName||null,
     extraPersons:extraPersons,
@@ -1183,32 +1139,9 @@ function renderMeterAssign(){
     h+='</tr>';
   }
   tb.innerHTML=h;
-
-  // === AUTO-ZAPIS NA BLUR + wskaźnik niezapisanych zmian ===
-  tb.querySelectorAll('input').forEach(inp=>{
-    inp.addEventListener('input',()=>markMetersDirty(true));
-    inp.addEventListener('blur',()=>{
-      if(!metersDirty) return;
-      saveAllMeters({silent:true});
-    });
-  });
-  const dInp=document.getElementById('initial-reading-date');
-  if(dInp){
-    dInp.addEventListener('change',()=>{ if(metersDirty) saveAllMeters({silent:true}); });
-  }
-  markMetersDirty(false);
 }
 
-// Wskaźnik niezapisanych zmian
-let metersDirty=false;
-function markMetersDirty(dirty){
-  metersDirty=dirty;
-  const ind=document.getElementById('meters-dirty-indicator');
-  if(ind) ind.style.display=dirty?'inline-flex':'none';
-}
-
-function saveAllMeters(opts){
-  opts=opts||{};
+function saveAllMeters(){
   const serialInputs=document.querySelectorAll('.meter-assign-table input[data-field="serial"]');
   const initialInputs=document.querySelectorAll('.meter-assign-table input[data-field="initial"]');
   const initialDate=document.getElementById('initial-reading-date')?.value||today();
@@ -1254,14 +1187,7 @@ function saveAllMeters(opts){
   });
 
   saveData(DATA); renderMeters(); renderDashboard();
-  markMetersDirty(false);
-  if(opts.silent){
-    // ciche zapisy z blur — pokazuj dyskretny status "Auto-zapis"
-    const ind=document.getElementById('meters-autosave-status');
-    if(ind){ ind.textContent='✓ Auto-zapisano '+new Date().toLocaleTimeString('pl-PL'); ind.style.opacity='1'; setTimeout(()=>{ind.style.opacity='0.5';},2000); }
-  } else {
-    toast(`Zapisano ${countMeters} liczników, ${countInitial} stanów początkowych`);
-  }
+  toast(`Zapisano ${countMeters} liczników, ${countInitial} stanów początkowych`);
 }
 
 function renderMeters(){
@@ -1332,14 +1258,21 @@ function renderReadings(){
     const isInitial=r.source==='initial';
     const u=(!isInitial&&r.previousValue!==null)?(r.value-r.previousValue):0;
     const c=isInitial?0:u*rate(m.type);
-    const srcLabel=r.source==='initial'?'Stan pocz.':'Ręczny';
-    const srcClass=r.source==='initial'?'badge-warn':'badge-neutral';
+    let srcLabel='Ręczny', srcClass='badge-neutral';
+    if(r.source==='initial'){srcLabel='Stan pocz.';srcClass='badge-warn';}
+    else if(r.source==='monthly'){srcLabel='Miesięczny';srcClass='badge-ok';}
     const rowStyle=isInitial?'opacity:0.7;font-style:italic;':'';
+    const locked=!!r.locked;
+    const statusBadge=locked?`<span class="apt-tile-badge badge-ok" title="Odczyt zamknięty — nie można zmienić">🔒 Zamknięty</span>`:`<span class="apt-tile-badge badge-neutral">Otwarty</span>`;
+    const actionBtn=locked
+      ? `<button class="btn btn-sm btn-outline" onclick="tryDeleteLockedReading('${r.id}')" title="Wymaga odblokowania">🔒</button>`
+      : `<button class="btn btn-sm btn-danger" onclick="deleteReading('${r.id}')">Usuń</button>`;
     return `<tr style="${rowStyle}"><td>${r.date}</td><td><strong>M${m.apartment}</strong></td><td>${MI[m.type]} ${ML[m.type]}</td><td><code>${m.serial}</code></td>
       <td>${isInitial?'—':(r.previousValue!==null?fmtN(r.previousValue):'—')}</td><td><strong>${fmtN(r.value)}</strong></td>
       <td>${isInitial?'— bazowy —':fmtN(u)+' '+MU[m.type]}</td><td>${isInitial?'—':`<strong>${fmt(c)}</strong>`}</td>
       <td><span class="apt-tile-badge ${srcClass}">${srcLabel}</span></td>
-      <td>${isInitial?'':`<button class="btn btn-sm btn-outline" onclick="editReading('${r.id}')">Edytuj</button> `}<button class="btn btn-sm btn-danger" onclick="deleteReading('${r.id}')">Usuń</button></td></tr>`;
+      <td>${statusBadge}</td>
+      <td>${actionBtn}</td></tr>`;
   }).join('');
 }
 
@@ -1379,16 +1312,194 @@ function saveReading(){
   if(!c){toast('Wprowadź co najmniej jeden odczyt','error');return;}
   saveData(DATA);closeModal('reading-modal');renderReadings();renderDashboard();toast(`Zapisano ${c} odczytów`);
 }
-function deleteReading(id){if(!confirm('Usunąć?'))return;DATA.readings=DATA.readings.filter(r=>r.id!==id);saveData(DATA);renderReadings();toast('Usunięto');}
-function editReading(id){
+function deleteReading(id){
+  const r=DATA.readings.find(x=>x.id===id);
+  if(r&&r.locked){return tryDeleteLockedReading(id);}
+  if(!confirm('Usunąć ten odczyt?'))return;
+  DATA.readings=DATA.readings.filter(r=>r.id!==id);saveData(DATA);renderReadings();toast('Usunięto');
+}
+
+function tryDeleteLockedReading(id){
   const r=DATA.readings.find(x=>x.id===id); if(!r)return;
   const m=DATA.meters.find(x=>x.id===r.meterId);
-  const newVal=prompt(`Edytuj odczyt ${m?ML[m.type]:''} (M${m?m.apartment:'?'})\nAktualna wartość: ${fmtN(r.value)}\nWpisz nową wartość:`,fmtN(r.value));
-  if(newVal===null)return;
-  const v=parseFloat(newVal.replace(',','.'));
-  if(isNaN(v)){toast('Nieprawidłowa wartość','error');return;}
-  r.value=v;
-  saveData(DATA);renderReadings();renderDashboard();toast('Zaktualizowano odczyt');
+  const info=`Odczyt z ${r.date}\nMieszkanie M${m?.apartment}\nLicznik: ${m?.serial}\nWartość: ${fmtN(r.value)}\n\n⚠️ Ten odczyt jest ZAMKNIĘTY (zabezpieczony przed przypadkową zmianą).\n\nUsunięcie zamkniętego odczytu może uszkodzić ciągłość rozliczeń (kolejne miesiące korzystają z tej wartości jako "stan poprzedni"). Aby kontynuować, wpisz w polu poniżej dokładnie słowo: ODBLOKUJ`;
+  const ans=prompt(info);
+  if(ans!=='ODBLOKUJ'){toast('Anulowano — odczyt pozostaje zamknięty','info');return;}
+  if(!confirm('OSTATECZNE potwierdzenie: usunąć zamknięty odczyt?'))return;
+  DATA.readings=DATA.readings.filter(x=>x.id!==id);
+  saveData(DATA);renderReadings();renderDashboard();
+  toast('Usunięto zamknięty odczyt','warn');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ODCZYTY MIESIĘCZNE — workflow dla całego budynku jednym widokiem
+// ═══════════════════════════════════════════════════════════════
+
+// Zwraca ostatni odczyt licznika DO podanego końca miesiąca (włącznie)
+function lastReadingBefore(meterId, endDateISO){
+  return DATA.readings
+    .filter(r=>r.meterId===meterId && r.date && r.date<=endDateISO)
+    .sort((a,b)=>b.date.localeCompare(a.date))[0]||null;
+}
+
+// Sprawdza czy dla danego miesiąca + licznika już zapisany jest odczyt miesięczny
+function existingMonthlyReading(meterId, periodYM){
+  return DATA.readings.find(r=>r.meterId===meterId && r.source==='monthly' && r.period===periodYM)||null;
+}
+
+function lastDayOfMonth(periodYM){
+  const [y,m]=periodYM.split('-').map(Number);
+  const d=new Date(y, m, 0); // dzień 0 następnego miesiąca = ostatni dzień bieżącego
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function prevMonth(periodYM){
+  const [y,m]=periodYM.split('-').map(Number);
+  const d=new Date(y, m-2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function openMonthlyReadingModal(){
+  const cur=curMonth();
+  document.getElementById('monthly-period').value=cur;
+  document.getElementById('monthly-date').value=lastDayOfMonth(cur);
+  loadMonthlyReadings();
+  openModal('monthly-reading-modal');
+}
+
+function loadMonthlyReadings(){
+  const period=document.getElementById('monthly-period').value;
+  const banner=document.getElementById('monthly-status-banner');
+  const saveBtn=document.getElementById('monthly-save-btn');
+  const c=document.getElementById('monthly-readings-form');
+  if(!period){c.innerHTML='<p style="color:var(--text-light)">Wybierz miesiąc.</p>';return;}
+  // Ustaw datę odczytu na ostatni dzień miesiąca (można nadpisać ręcznie)
+  const dInp=document.getElementById('monthly-date');
+  if(!dInp.value||dInp.value.substring(0,7)!==period){dInp.value=lastDayOfMonth(period);}
+
+  // Sprawdź czy miesiąc już zamknięty
+  const anyLocked=DATA.readings.some(r=>r.source==='monthly'&&r.period===period&&r.locked);
+  if(anyLocked){
+    banner.innerHTML=`<div style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px;border-radius:6px"><strong>🔒 Miesiąc ${period} jest już ZAMKNIĘTY.</strong> Odczyty zostały zapisane wcześniej i są zabezpieczone przed zmianą. Możesz wybrać inny miesiąc lub odblokować poszczególne odczyty w tabeli głównej.</div>`;
+    saveBtn.style.display='none';
+  } else {
+    banner.innerHTML=`<div style="background:#d1ecf1;border-left:4px solid #17a2b8;padding:12px;border-radius:6px"><strong>📝 Miesiąc ${period} otwarty.</strong> Wpisz aktualne odczyty. Po zapisaniu zostaną <strong>zamknięte</strong> — przypadkowe kliknięcie ich nie zmieni.</div>`;
+    saveBtn.style.display='';
+  }
+
+  // Pogrupuj liczniki wg mieszkania
+  const apts=[1,2,3,4,5,6,7,8];
+  const endOfPrevMonth=lastDayOfMonth(prevMonth(period));
+  let html='';
+  let totalMeters=0;
+  apts.forEach(apt=>{
+    const meters=getMeters(apt).sort((a,b)=>MTYPES.indexOf(a.type)-MTYPES.indexOf(b.type));
+    if(!meters.length)return;
+    totalMeters+=meters.length;
+    html+=`<div class="card" style="margin-bottom:12px;padding:12px"><div style="font-weight:600;font-size:1.05em;margin-bottom:8px;color:var(--primary)">Mieszkanie M${apt}</div>`;
+    html+=`<div class="table-wrap"><table style="width:100%"><thead><tr style="background:#f8f9fa"><th style="text-align:left;padding:6px">Medium</th><th style="text-align:left;padding:6px">Nr seryjny</th><th style="text-align:right;padding:6px">Odczyt poprzedni</th><th style="text-align:left;padding:6px">Odczyt aktualny (${period})</th><th style="text-align:right;padding:6px">Zużycie</th><th style="text-align:right;padding:6px">Koszt</th></tr></thead><tbody>`;
+    meters.forEach(m=>{
+      const existing=existingMonthlyReading(m.id, period);
+      const prev=lastReadingBefore(m.id, endOfPrevMonth);
+      const prevVal=prev?prev.value:(m.initialValue??0);
+      const curVal=existing?existing.value:'';
+      const rateVal=rate(m.type);
+      const disabled=anyLocked||existing&&existing.locked?'disabled':'';
+      html+=`<tr data-meter-id="${m.id}">
+        <td style="padding:6px">${MI[m.type]} ${ML[m.type]}</td>
+        <td style="padding:6px"><code style="font-size:0.85em">${m.serial||'—'}</code></td>
+        <td style="padding:6px;text-align:right"><strong>${fmtN(prevVal)}</strong> ${MU[m.type]}</td>
+        <td style="padding:6px"><input type="number" step="0.01" class="form-input monthly-reading-value" data-meter-id="${m.id}" data-prev="${prevVal}" data-rate="${rateVal}" data-type="${m.type}" value="${curVal}" oninput="recalcMonthlyRow(this)" ${disabled} style="width:140px;padding:6px"></td>
+        <td style="padding:6px;text-align:right" class="row-usage">${existing?fmtN(existing.value-prevVal)+' '+MU[m.type]:'—'}</td>
+        <td style="padding:6px;text-align:right" class="row-cost">${existing?fmt((existing.value-prevVal)*rateVal):'—'}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div></div>`;
+  });
+  if(!totalMeters){html='<p style="color:var(--text-light);padding:20px">Brak liczników. Najpierw przypisz liczniki do mieszkań w zakładce Liczniki.</p>';saveBtn.style.display='none';}
+  c.innerHTML=html;
+}
+
+function recalcMonthlyRow(inp){
+  const prev=parseFloat(inp.dataset.prev)||0;
+  const rt=parseFloat(inp.dataset.rate)||0;
+  const type=inp.dataset.type;
+  const v=parseFloat(inp.value);
+  const tr=inp.closest('tr');
+  if(isNaN(v)){tr.querySelector('.row-usage').textContent='—';tr.querySelector('.row-cost').textContent='—';return;}
+  const u=v-prev;
+  tr.querySelector('.row-usage').textContent=fmtN(u)+' '+MU[type];
+  tr.querySelector('.row-cost').textContent=fmt(u*rt);
+  inp.style.borderColor=u<0?'#dc3545':'';
+}
+
+function saveMonthlyReadings(){
+  const period=document.getElementById('monthly-period').value;
+  const date=document.getElementById('monthly-date').value;
+  if(!period||!date){toast('Wybierz miesiąc i datę','error');return;}
+  // Walidacja: ostrzeżenie gdy istnieją już odczyty z późniejszego miesiąca
+  const laterExists=DATA.readings.some(r=>r.source==='monthly'&&r.period>period);
+  if(laterExists){if(!confirm('UWAGA: istnieją już zapisane odczyty miesięczne z PÓŹNIEJSZYCH miesięcy. Wprowadzanie danych "wstecz" może wymagać przeliczenia. Kontynuować?'))return;}
+
+  const inputs=document.querySelectorAll('.monthly-reading-value');
+  let saved=0, errors=[];
+  inputs.forEach(inp=>{
+    const v=parseFloat(inp.value);
+    if(isNaN(v))return;
+    const meterId=inp.dataset.meterId;
+    const prev=parseFloat(inp.dataset.prev)||0;
+    if(v<prev){const m=DATA.meters.find(x=>x.id===meterId);errors.push(`M${m?.apartment} ${ML[m?.type]}: ${v} < ${prev}`);return;}
+    // Usuń ewentualny WCZEŚNIEJ niezablokowany odczyt miesięczny dla tego miesiąca
+    const existing=DATA.readings.find(r=>r.meterId===meterId&&r.source==='monthly'&&r.period===period&&!r.locked);
+    if(existing){existing.value=v;existing.previousValue=prev;existing.date=date;existing.locked=true;existing.lockedAt=new Date().toISOString();}
+    else {
+      DATA.readings.push({
+        id:genId(),meterId,date,value:v,previousValue:prev,
+        source:'monthly',period,locked:true,lockedAt:new Date().toISOString()
+      });
+    }
+    saved++;
+  });
+  if(errors.length){toast('Błędy: '+errors.join(' | '),'error');return;}
+  if(!saved){toast('Brak wypełnionych odczytów','error');return;}
+  saveData(DATA);closeModal('monthly-reading-modal');renderReadings();renderDashboard();
+  toast(`🔒 Zamknięto miesiąc ${period} — zapisano ${saved} odczytów`,'success');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WIDOK HISTORYCZNY — stan licznika na koniec dowolnego miesiąca
+// ═══════════════════════════════════════════════════════════════
+function openHistoricalView(){
+  document.getElementById('historical-period').value=curMonth();
+  loadHistoricalView();
+  openModal('historical-view-modal');
+}
+
+function loadHistoricalView(){
+  const period=document.getElementById('historical-period').value;
+  const c=document.getElementById('historical-view-content');
+  if(!period){c.innerHTML='';return;}
+  const endDate=lastDayOfMonth(period);
+  let html=`<p style="color:var(--text-light);margin-bottom:12px">Stan liczników na <strong>${endDate}</strong> (ostatni odczyt zapisany do tego dnia włącznie). Widok tylko do odczytu — nie można nic zmienić.</p>`;
+  const apts=[1,2,3,4,5,6,7,8];
+  apts.forEach(apt=>{
+    const meters=getMeters(apt).sort((a,b)=>MTYPES.indexOf(a.type)-MTYPES.indexOf(b.type));
+    if(!meters.length)return;
+    html+=`<div class="card" style="margin-bottom:10px;padding:10px"><div style="font-weight:600;color:var(--primary);margin-bottom:6px">Mieszkanie M${apt}</div>`;
+    html+=`<table style="width:100%;font-size:0.9em"><thead><tr style="background:#f8f9fa"><th style="text-align:left;padding:4px">Medium</th><th style="text-align:left;padding:4px">Nr seryjny</th><th style="text-align:right;padding:4px">Stan na koniec ${period}</th><th style="text-align:left;padding:4px">Data odczytu</th><th style="text-align:left;padding:4px">Źródło</th></tr></thead><tbody>`;
+    meters.forEach(m=>{
+      const r=lastReadingBefore(m.id, endDate);
+      if(!r){
+        html+=`<tr><td style="padding:4px">${MI[m.type]} ${ML[m.type]}</td><td style="padding:4px"><code>${m.serial||'—'}</code></td><td style="padding:4px;text-align:right;color:#999">brak danych</td><td style="padding:4px">—</td><td style="padding:4px">—</td></tr>`;
+      } else {
+        const lockIcon=r.locked?'🔒 ':'';
+        let srcLbl=r.source==='initial'?'Stan pocz.':(r.source==='monthly'?'Miesięczny':'Ręczny');
+        html+=`<tr><td style="padding:4px">${MI[m.type]} ${ML[m.type]}</td><td style="padding:4px"><code>${m.serial||'—'}</code></td><td style="padding:4px;text-align:right"><strong>${fmtN(r.value)}</strong> ${MU[m.type]}</td><td style="padding:4px">${lockIcon}${r.date}</td><td style="padding:4px">${srcLbl}</td></tr>`;
+      }
+    });
+    html+=`</tbody></table></div>`;
+  });
+  c.innerHTML=html;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1397,88 +1508,75 @@ function editReading(id){
 function renderInvoices(){
   populateFilters();
   const month=document.getElementById('invoice-month-filter').value;
+  const tf=document.getElementById('invoice-type-filter').value;
   let fl=DATA.invoices.filter(i=>i.date&&i.date.startsWith(month));
+  if(tf)fl=fl.filter(i=>i.type===tf);
   const now=new Date();
   fl.forEach(i=>{if(i.status==='pending'&&new Date(i.dueDate)<now)i.status='overdue';});saveData(DATA);
   const tb=document.getElementById('invoices-tbody');
-  if(!fl.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-light)">Brak rachunków.</td></tr>';return;}
+  if(!fl.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-light)">Brak faktur.</td></tr>';return;}
   tb.innerHTML=fl.map(i=>{
     const t=DATA.tenants.find(x=>x.id===i.tenantId);
     const b=i.status==='paid'?'<span class="apt-tile-badge badge-ok">Opłacona</span>':i.status==='overdue'?'<span class="apt-tile-badge badge-danger">Przeterminowana</span>':'<span class="apt-tile-badge badge-warn">Oczekująca</span>';
     return `<tr><td><strong>${i.number}</strong></td><td>${i.date}</td><td>${t?t.name:'—'}</td><td>M${t?t.apartment:'?'}</td>
-      <td><strong>${fmt(i.amountGross)}</strong></td><td>${b}</td>
-      <td style="white-space:nowrap"><button class="btn btn-sm btn-outline" onclick="viewInvoice('${i.id}')">Podgląd</button> <button class="btn btn-sm btn-success" onclick="downloadPDF('${i.id}')">PDF</button> <button class="btn btn-sm btn-primary" onclick="sendInvoiceEmail('${i.id}')">Wyślij</button> <button class="btn btn-sm btn-outline" onclick="editInvoiceNumber('${i.id}')">Nr</button> <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${i.id}')">Usuń</button></td></tr>`;
+      <td>${i.type==='czynsz'?'Czynsz':'Media'}</td><td>${fmt(i.amountNet)}</td><td><strong>${fmt(i.amountGross)}</strong></td><td>${b}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="viewInvoice('${i.id}')">Podgląd</button> <button class="btn btn-sm btn-success" onclick="downloadPDF('${i.id}')">PDF</button></td></tr>`;
   }).join('');
-}
-
-function deleteInvoice(id){
-  const inv=DATA.invoices.find(i=>i.id===id);
-  if(!inv)return;
-  if(!confirm(`Usunąć rachunek ${inv.number}?`))return;
-  DATA.invoices=DATA.invoices.filter(i=>i.id!==id);
-  saveData(DATA);renderInvoices();renderDashboard();toast(`Usunięto rachunek ${inv.number}`);
 }
 
 function generateMonthlyInvoices(){
   const month=document.getElementById('invoice-month-filter')?.value||curMonth();
-  const aptVal=document.getElementById('invoice-apt-gen')?.value||'all';
-  const dt=today(),due=new Date(Date.now()+14*864e5).toISOString().split('T')[0];
+  const ex=DATA.invoices.filter(i=>i.date&&i.date.startsWith(month));
+  if(ex.length&&!confirm(`Istnieje ${ex.length} faktur za ${month}. Nadpisać?`))return;
+  DATA.invoices=DATA.invoices.filter(i=>!i.date||!i.date.startsWith(month));
+
+  let gen=0;const dt=today(),due=new Date(Date.now()+14*864e5).toISOString().split('T')[0];
   const [yr,mo]=month.split('-');
-  const monthNames=['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
-  const monthLabel=monthNames[parseInt(mo)-1];
 
-  // Filtruj najemców wg wybranego lokalu
-  let tenants=DATA.tenants.slice();
-  if(aptVal!=='all') tenants=tenants.filter(t=>t.apartment===parseInt(aptVal));
-  if(!tenants.length){toast('Brak najemców do rozliczenia','error');return;}
+  DATA.tenants.forEach(t=>{
+    // Faktura 1: Czynsz
+    const rn=DATA.nextInvoiceNum++;
+    DATA.invoices.push({id:genId(),tenantId:t.id,type:'czynsz',number:`FV/${yr}/${mo}/${String(rn).padStart(3,'0')}`,
+      amountNet:t.rent,amountGross:+(t.rent*(1+DATA.rates.vat/100)).toFixed(2),date:dt,dueDate:due,status:'pending',
+      items:[{name:'Czynsz najmu — Mieszkanie '+t.apartment,qty:1,unit:'mies.',priceNet:t.rent,totalNet:t.rent}],bankAccount:DATA.owner.bank1||'—'});
+    gen++;
 
-  // Sprawdź czy istnieją rachunki dla tych lokali w tym miesiącu
-  const aptNums=tenants.map(t=>t.apartment);
-  const existing=DATA.invoices.filter(i=>i.date&&i.date.startsWith(month)&&aptNums.includes(DATA.tenants.find(x=>x.id===i.tenantId)?.apartment));
-  if(existing.length&&!confirm(`Istnieje ${existing.length} rachunków za ${month} dla wybranych lokali. Usunąć je i wygenerować nowe?`))return;
-  const exIds=new Set(existing.map(i=>i.id));
-  DATA.invoices=DATA.invoices.filter(i=>!exIds.has(i.id));
+    // Faktura 2: Media
+    const ms=getMeters(t.apartment); const items=[]; let total=0;
+    ms.forEach(m=>{
+      const rs=DATA.readings.filter(r=>r.meterId===m.id&&r.date.startsWith(month)&&r.source!=='initial').sort((a,b)=>b.date.localeCompare(a.date));
+      if(rs.length){const r=rs[0],u=r.previousValue!==null?r.value-r.previousValue:0,c=+(u*rate(m.type)).toFixed(2);
+        items.push({name:ML[m.type],qty:+u.toFixed(2),unit:MU[m.type],priceNet:rate(m.type),totalNet:c});total+=c;}
+    });
+    const gc=t.persons*rate('garbage');
+    items.push({name:'Wywóz odpadów',qty:t.persons,unit:'os.',priceNet:rate('garbage'),totalNet:+gc.toFixed(2)});total+=gc;
 
-  // Numeracja: kolejny numer w danym miesiącu (resetuje się co miesiąc)
-  const existingInMonth=DATA.invoices.filter(i=>i.date&&i.date.startsWith(month));
-  let nextNum=existingInMonth.length>0?Math.max(...existingInMonth.map(i=>{const m=i.number.match(/^(\d+)\//);return m?parseInt(m[1]):0;}))+1:1;
-
-  let gen=0;
-
-  tenants.forEach(t=>{
-    const rn=nextNum++;
-    DATA.invoices.push({id:genId(),tenantId:t.id,type:'czynsz',number:`${rn}/${mo}-${yr}`,
-      amountNet:t.rent,amountGross:t.rent,date:dt,dueDate:due,status:'pending',
-      items:[{name:`Czynsz najmu za ${monthLabel} — Mieszkanie M${t.apartment}`,qty:1,unit:'mies.',priceNet:t.rent,totalNet:t.rent}],bankAccount:DATA.owner.bank1||'—'});
+    const mn=DATA.nextInvoiceNum++;
+    DATA.invoices.push({id:genId(),tenantId:t.id,type:'media',number:`FV/${yr}/${mo}/${String(mn).padStart(3,'0')}`,
+      amountNet:+total.toFixed(2),amountGross:+(total*(1+DATA.rates.vat/100)).toFixed(2),date:dt,dueDate:due,status:'pending',
+      items,bankAccount:DATA.owner.bank2||'—'});
     gen++;
   });
 
-  saveData(DATA);renderInvoices();renderDashboard();toast(`Wygenerowano ${gen} rachunków za ${month}`);
-}
-
-function editInvoiceNumber(id){
-  const inv=DATA.invoices.find(i=>i.id===id);if(!inv)return;
-  const newNum=prompt(`Edytuj numer rachunku:`,inv.number);
-  if(newNum===null||newNum.trim()===''||newNum===inv.number)return;
-  inv.number=newNum.trim();
-  saveData(DATA);renderInvoices();renderPayments();toast('Zaktualizowano numer rachunku');
+  saveData(DATA);renderInvoices();renderDashboard();toast(`Wygenerowano ${gen} faktur za ${month}`);
 }
 
 function viewInvoice(id){
   const inv=DATA.invoices.find(i=>i.id===id);if(!inv)return;
   const t=DATA.tenants.find(x=>x.id===inv.tenantId);
   document.getElementById('invoice-detail-title').textContent=inv.number;
-  const itm=inv.items?`<table style="width:100%;margin:16px 0"><thead><tr><th>Pozycja</th><th>Ilość</th><th>Jedn.</th><th>Cena</th><th>Wartość</th></tr></thead><tbody>
+  const itm=inv.items?`<table style="width:100%;margin:16px 0"><thead><tr><th>Pozycja</th><th>Ilość</th><th>Jedn.</th><th>Cena netto</th><th>Wartość netto</th></tr></thead><tbody>
     ${inv.items.map(it=>`<tr><td>${it.name}</td><td>${fmtN(it.qty)}</td><td>${it.unit}</td><td>${fmt(it.priceNet)}</td><td><strong>${fmt(it.totalNet||it.qty*it.priceNet)}</strong></td></tr>`).join('')}</tbody></table>`:'';
   document.getElementById('invoice-detail-body').innerHTML=`<div style="border:1px solid var(--border);border-radius:8px;padding:24px">
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:20px">
-      <div><strong>${DATA.owner.company}</strong><br>${DATA.owner.address}<br>PESEL: ${DATA.owner.nip||'—'}</div>
-      <div style="text-align:right"><h2 style="color:var(--primary);margin-bottom:8px">RACHUNEK</h2><strong>${inv.number}</strong><br>Data: ${inv.date}<br>Termin: ${inv.dueDate}</div>
+      <div><strong>${DATA.owner.company}</strong><br>${DATA.owner.address}<br>NIP: ${DATA.owner.nip||'—'}</div>
+      <div style="text-align:right"><h2 style="color:var(--primary);margin-bottom:8px">FAKTURA VAT</h2><strong>${inv.number}</strong><br>Data: ${inv.date}<br>Termin: ${inv.dueDate}</div>
     </div><hr style="border:none;border-top:2px solid var(--primary);margin:16px 0">
-    <div style="margin-bottom:16px"><strong>Nabywca:</strong><br>${t?(t.company?t.company+'<br>':'')+t.name:'—'}<br>${t&&t.nip?(t.company?'NIP: ':'PESEL: ')+t.nip+'<br>':''}${t&&t.address?t.address+'<br>':''}${t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':''}</div>
+    <div style="margin-bottom:16px"><strong>Nabywca:</strong><br>${t?t.name:'—'}<br>${t&&t.nip?'NIP: '+t.nip+'<br>':''}${t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':''}</div>
     ${itm}
     <div style="text-align:right;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-      <div style="font-size:1.2em;margin-top:8px">Do zapłaty: <strong style="color:var(--primary)">${fmt(inv.amountGross)}</strong></div>
+      <div>Netto: <strong>${fmt(inv.amountNet)}</strong></div><div>VAT (${DATA.rates.vat}%): <strong>${fmt(inv.amountGross-inv.amountNet)}</strong></div>
+      <div style="font-size:1.2em;margin-top:8px">Brutto: <strong style="color:var(--primary)">${fmt(inv.amountGross)}</strong></div>
     </div>
     <div style="margin-top:20px;padding:12px;background:var(--primary-bg);border-radius:8px;font-size:0.9em"><strong>Nr konta:</strong> ${inv.bankAccount||'—'}</div>
   </div>`;
@@ -1492,23 +1590,20 @@ async function downloadPDF(id){
   const doc=await createPdfDoc();
 
   doc.setFontSize(10);doc.setTextColor(100);
-  doc.text(DATA.owner.company,14,20);doc.text(DATA.owner.address,14,26);doc.text('PESEL: '+(DATA.owner.nip||'—'),14,32);
+  doc.text(DATA.owner.company,14,20);doc.text(DATA.owner.address,14,26);doc.text('NIP: '+(DATA.owner.nip||'—'),14,32);
 
-  doc.setFontSize(18);doc.setTextColor(27,79,114);doc.text('RACHUNEK',140,20);
+  doc.setFontSize(18);doc.setTextColor(27,79,114);doc.text('FAKTURA VAT',140,20);
   doc.setFontSize(11);doc.setTextColor(0);doc.text(inv.number,140,28);doc.text('Data: '+inv.date,140,34);doc.text('Termin: '+inv.dueDate,140,40);
 
   doc.setDrawColor(27,79,114);doc.setLineWidth(0.5);doc.line(14,45,196,45);
   doc.setFontSize(10);doc.text('Nabywca:',14,55);doc.setFontSize(11);
-  let ny=62;
-  if(t&&t.company){doc.text(t.company,14,ny);ny+=6;}
-  doc.text(t?t.name:'—',14,ny);ny+=6;
-  if(t&&t.nip){doc.text((t.company?'NIP: ':'PESEL: ')+t.nip,14,ny);ny+=6;}
-  if(t&&t.address){doc.text(t.address,14,ny);ny+=6;}
-  doc.text(t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':'',14,ny);
+  doc.text(t?t.name:'—',14,62);
+  if(t&&t.nip)doc.text('NIP: '+t.nip,14,68);
+  doc.text(t?'M'+t.apartment+', Al. Brzozowa 77, 89-600 Chojnice':'',14,t&&t.nip?74:68);
 
   let y=85;
   doc.setFillColor(27,79,114);doc.rect(14,y,182,8,'F');doc.setTextColor(255);doc.setFontSize(9);
-  doc.text('Lp.',16,y+6);doc.text('Pozycja',28,y+6);doc.text('Ilość',110,y+6);doc.text('Jedn.',128,y+6);doc.text('Cena',146,y+6);doc.text('Wartość',174,y+6);
+  doc.text('Lp.',16,y+6);doc.text('Pozycja',28,y+6);doc.text('Ilość',110,y+6);doc.text('Jedn.',128,y+6);doc.text('Cena netto',146,y+6);doc.text('Wartość netto',170,y+6);
   y+=10;doc.setTextColor(0);
   if(inv.items)inv.items.forEach((it,idx)=>{
     if(idx%2===1){doc.setFillColor(242,247,251);doc.rect(14,y-4,182,8,'F');}
@@ -1516,14 +1611,12 @@ async function downloadPDF(id){
     doc.text(it.unit,128,y+2);doc.text(fmtN(it.priceNet),146,y+2);doc.text(fmtN(it.totalNet||it.qty*it.priceNet),170,y+2);y+=8;
   });
   y+=8;doc.line(120,y,196,y);y+=8;
-  doc.setFontSize(12);doc.setTextColor(27,79,114);doc.text('Do zapłaty: '+fmtN(inv.amountGross)+' zł',145,y);
+  doc.text('Netto: '+fmtN(inv.amountNet)+' zł',150,y);y+=6;
+  doc.text('VAT ('+DATA.rates.vat+'%): '+fmtN(inv.amountGross-inv.amountNet)+' zł',150,y);y+=8;
+  doc.setFontSize(12);doc.setTextColor(27,79,114);doc.text('Brutto: '+fmtN(inv.amountGross)+' zł',150,y);
   y+=16;doc.setFontSize(9);doc.setTextColor(0);doc.setFillColor(235,245,251);doc.rect(14,y-4,182,12,'F');
   doc.text('Nr konta: '+(inv.bankAccount||'—'),16,y+3);
-  if(arguments[1]===true){
-    // Return blob instead of saving
-    return doc.output('blob');
-  }
-  doc.save('Rachunek-'+inv.number.replace(/\//g,'-')+'.pdf');toast('PDF pobrany');
+  doc.save(inv.number.replace(/\//g,'-')+'.pdf');toast('PDF pobrany');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1541,125 +1634,21 @@ function renderPayments(){
     <div class="stat-card"><div class="stat-value">${fmt(owed)}</div><div class="stat-label">Do zapłaty</div></div>`;
   const all=[...ovd,...pnd,...paid];
   const tb=document.getElementById('payments-tbody');
-  if(!all.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-light)">Brak rachunków.</td></tr>';return;}
+  if(!all.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-light)">Brak faktur.</td></tr>';return;}
   tb.innerHTML=all.map(i=>{
     const t=DATA.tenants.find(x=>x.id===i.tenantId);
     const due=new Date(i.dueDate),diff=Math.ceil((due-now)/864e5);
     const dl=i.status==='paid'?'—':diff>0?diff+' dni':diff===0?'Dziś':Math.abs(diff)+' dni po';
     const dc=i.status==='paid'?'':diff<0?'color:var(--danger);font-weight:700':diff<=3?'color:var(--warning)':'';
     const b=i.status==='paid'?'<span class="apt-tile-badge badge-ok">Opłacona</span>':i.status==='overdue'?'<span class="apt-tile-badge badge-danger">Przeterminowana</span>':'<span class="apt-tile-badge badge-warn">Oczekująca</span>';
-    return `<tr><td>${i.number}</td><td>${t?t.name:'—'}</td>
+    return `<tr><td>${i.number}</td><td>${t?t.name:'—'}</td><td>${i.type==='czynsz'?'Czynsz':'Media'}</td>
       <td><strong>${fmt(i.amountGross)}</strong></td><td>${i.dueDate}</td><td style="${dc}">${dl}</td><td>${b}</td>
-      <td style="white-space:nowrap">${i.status!=='paid'?`<button class="btn btn-sm btn-success" onclick="markPaid('${i.id}')">Opłacona</button> <button class="btn btn-sm btn-warning" onclick="sendReminder('${i.id}')">Przypomnij</button>`:
+      <td>${i.status!=='paid'?`<button class="btn btn-sm btn-success" onclick="markPaid('${i.id}')">Opłacona</button>`:
         `<button class="btn btn-sm btn-outline" onclick="markUnpaid('${i.id}')">Cofnij</button>`}</td></tr>`;
   }).join('');
 }
 function markPaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status='paid';i.paidDate=today();}saveData(DATA);renderPayments();renderDashboard();toast('Oznaczono jako opłacona');}
 function markUnpaid(id){const i=DATA.invoices.find(x=>x.id===id);if(i){i.status=new Date(i.dueDate)<new Date()?'overdue':'pending';delete i.paidDate;}saveData(DATA);renderPayments();renderDashboard();toast('Cofnięto status');}
-
-async function sendReminder(id){
-  const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
-  const t=DATA.tenants.find(x=>x.id===inv.tenantId);
-  if(!t||!t.email){toast('Brak adresu e-mail najemcy — uzupełnij dane w zakładce Najemcy','error');return;}
-  // Pobierz PDF
-  await downloadPDF(id);
-  const bankAcct=inv.bankAccount||'—';
-  openGmail(t.email,
-    `Przypomnienie o płatności — rachunek ${inv.number}`,
-`Szanowna Pani / Szanowny Panie,
-
-uprzejmie przypominam o nieuregulowanej płatności za rachunek nr ${inv.number}.
-
-Kwota do zapłaty: ${fmtN(inv.amountGross)} zł
-Termin płatności: ${inv.dueDate}
-
-Proszę o dokonanie wpłaty na rachunek bankowy:
-${bankAcct}
-
-W tytule przelewu proszę wpisać numer rachunku: ${inv.number}
-
-W razie pytań pozostaję do dyspozycji.
-
-Z poważaniem,
-${DATA.owner.company}
-${DATA.owner.address||''}
-tel. ${DATA.owner.phone||''}
-e-mail: ${DATA.owner.email||''}`
-  );
-  toast('PDF pobrany — przeciągnij go do okna Gmail','info');
-}
-
-async function sendInvoiceEmail(id){
-  const inv=DATA.invoices.find(x=>x.id===id); if(!inv)return;
-  const t=DATA.tenants.find(x=>x.id===inv.tenantId);
-  if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
-  // Pobierz PDF
-  await downloadPDF(id);
-  const [yr,mo]=inv.date.split('-');
-  const monthNames=['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
-  const monthLabel=monthNames[parseInt(mo)-1]+' '+yr;
-  openGmail(t.email,
-    `Rachunek za czynsz nr ${inv.number} — ${monthLabel} — lokal M${t.apartment}`,
-`Szanowna Pani / Szanowny Panie,
-
-w załączeniu przesyłam rachunek nr ${inv.number} za czynsz najmu lokalu mieszkalnego M${t.apartment} przy Al. Brzozowej 77, 89-600 Chojnice za miesiąc ${monthLabel}.
-
-Kwota do zapłaty: ${fmtN(inv.amountGross)} zł
-Termin płatności: ${inv.dueDate}
-
-Numer rachunku bankowego do wpłaty:
-${inv.bankAccount||'—'}
-
-W tytule przelewu proszę wpisać numer rachunku: ${inv.number}
-
-W razie pytań pozostaję do dyspozycji.
-
-Z poważaniem,
-${DATA.owner.company}
-${DATA.owner.address||''}
-tel. ${DATA.owner.phone||''}
-e-mail: ${DATA.owner.email||''}`
-  );
-  toast('PDF pobrany — przeciągnij go do okna Gmail','info');
-}
-
-async function sendSettlementEmail(id){
-  const s=DATA.settlements.find(x=>x.id===id); if(!s)return;
-  const t=DATA.tenants.find(x=>x.id===s.tenantId);
-  if(!t||!t.email){toast('Brak adresu e-mail najemcy','error');return;}
-  // Pobierz PDF
-  await exportSettlementPDF(id);
-  const mediaList=s.mediaItems.map(m=>`- ${ML[m.type]}: ${fmtN(m.consumption)} ${m.unit} x ${fmtN(m.rate)} zł = ${fmtN(m.cost)} zł`).join('\n');
-  const sewageLine=s.sewageCost?`- Ścieki: ${fmtN(s.sewageVolume)} m³ x ${fmtN(s.sewageRate)} zł = ${fmtN(s.sewageCost)} zł`:'';
-  const hwLine=s.hotWaterHeatingCost?`- Podgrzanie wody: ${fmtN(s.hotWaterHeatingVolume)} m³ x ${fmtN(s.hotWaterHeatingRate)} zł = ${fmtN(s.hotWaterHeatingCost)} zł`:'';
-  const garbageLine=`- Wywóz śmieci: ${s.garbagePersons} os. x ${fmtN(s.garbageRate)} zł = ${fmtN(s.garbageCost)} zł`;
-  openGmail(t.email,
-    `Rozliczenie mediów — ${s.monthLabel} — lokal M${s.apartment}`,
-`Szanowna Pani / Szanowny Panie,
-
-w załączeniu przesyłam rozliczenie zużycia mediów za miesiąc ${s.monthLabel} dla lokalu M${s.apartment} przy Al. Brzozowej 77, 89-600 Chojnice.
-
-Zestawienie kosztów:
-${mediaList}
-${sewageLine?sewageLine+'\n':''}${hwLine?hwLine+'\n':''}${garbageLine}
-
-Łączny koszt mediów: ${fmtN(s.totalAll)} zł
-
-Numer rachunku bankowego do wpłaty:
-${DATA.owner.bank2||DATA.owner.bank1||'—'}
-
-Szczegółowe rozliczenie z odczytami liczników znajduje się w załączonym pliku PDF.
-
-W razie pytań pozostaję do dyspozycji.
-
-Z poważaniem,
-${DATA.owner.company}
-${DATA.owner.address||''}
-tel. ${DATA.owner.phone||''}
-e-mail: ${DATA.owner.email||''}`
-  );
-  toast('PDF pobrany — przeciągnij go do okna Gmail','info');
-}
 
 // ═══════════════════════════════════════════════════════════════
 // ROZLICZENIA MIESIĘCZNE
@@ -1669,7 +1658,7 @@ let viewingSettleId=null;
 
 function initSettlements(){
   if(!DATA.settlements) DATA.settlements=[];
-  document.getElementById('settle-month').value=prevMonth();
+  document.getElementById('settle-month').value=curMonth();
   // Fill year select
   const years=new Set();
   DATA.settlements.forEach(s=>years.add(s.month.substring(0,4)));
@@ -1680,13 +1669,8 @@ function initSettlements(){
 }
 
 function getReadingsForMonth(meterId, month){
-  // Find readings in the given month OR the first 5 days of next month
-  // (bo odczyty za kwiecień robimy 1-5 maja)
-  const [yr,mn]=month.split('-').map(Number);
-  const nextMonth=mn===12?`${yr+1}-01`:`${yr}-${String(mn+1).padStart(2,'0')}`;
-  const cutoff=`${nextMonth}-06`; // do 5. dnia następnego miesiąca
-  return DATA.readings.filter(r=>r.meterId===meterId && r.source!=='initial' &&
-    (r.date.substring(0,7)===month || (r.date.substring(0,7)===nextMonth && r.date<=cutoff)));
+  // Find readings in the given month for this meter
+  return DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)===month && r.source!=='initial');
 }
 
 function getPreviousReading(meterId, month){
@@ -1696,19 +1680,10 @@ function getPreviousReading(meterId, month){
 }
 
 function getCurrentReading(meterId, month){
-  // Get the latest reading for this settlement month
-  // Includes readings from: the settlement month itself + first 5 days of next month
-  // (bo odczyty za kwiecień robimy np. 1 maja)
-  const [yr,mn]=month.split('-').map(Number);
-  const nextMonth=mn===12?`${yr+1}-01`:`${yr}-${String(mn+1).padStart(2,'0')}`;
-  const cutoff=`${nextMonth}-06`;
-
-  const relevant=DATA.readings.filter(r=>r.meterId===meterId && r.source!=='initial' &&
-    (r.date.substring(0,7)===month || (r.date.substring(0,7)===nextMonth && r.date<=cutoff)))
-    .sort((a,b)=>b.date.localeCompare(a.date));
-  if(relevant.length) return relevant[0];
-
-  // Fallback: latest reading up to end of month
+  // Get the latest reading IN the given month
+  const inMonth=DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)===month && r.source!=='initial').sort((a,b)=>b.date.localeCompare(a.date));
+  if(inMonth.length) return inMonth[0];
+  // If none in month, get latest reading up to end of month
   const all=DATA.readings.filter(r=>r.meterId===meterId && r.date.substring(0,7)<=month).sort((a,b)=>b.date.localeCompare(a.date));
   return all[0]||null;
 }
@@ -1733,26 +1708,11 @@ function generateSettlement(){
     let totalMedia=0;
 
     for(const meter of meters){
-      // Szukamy najnowszego odczytu dla tego okresu rozliczeniowego
-      // Odczyt zawiera previousValue (stan poprzedni) i value (stan aktualny)
-      const reading=getCurrentReading(meter.id, month);
-      let prevVal, currVal;
-      if(reading && reading.source!=='initial' && reading.previousValue!==null && reading.previousValue!==undefined){
-        // Odczyt ma wbudowaną wartość poprzednią — używamy jej (tak samo jak w zakładce Odczyty)
-        prevVal=reading.previousValue;
-        currVal=reading.value;
-      } else if(reading){
-        // Odczyt bez previousValue — szukamy osobno
-        const prev=getPreviousReading(meter.id, month);
-        prevVal=prev?prev.value:(meter.initialValue||0);
-        currVal=reading.value;
-      } else {
-        // Brak odczytu — zerowe zużycie
-        prevVal=meter.initialValue||0;
-        currVal=prevVal;
-      }
-      const rawConsumption=Math.max(0, currVal-prevVal);
-      const consumption=Math.round(rawConsumption*100)/100;
+      const prev=getPreviousReading(meter.id, month);
+      const curr=getCurrentReading(meter.id, month);
+      const prevVal=prev?prev.value:(meter.initialValue||0);
+      const currVal=curr?curr.value:prevVal;
+      const consumption=Math.max(0, currVal-prevVal);
       const unitRate=rate(meter.type);
       const cost=Math.round(consumption*unitRate*100)/100;
       totalMedia+=cost;
@@ -1762,8 +1722,8 @@ function generateSettlement(){
         serial: meter.serial,
         prevValue: prevVal,
         currValue: currVal,
-        prevDate: reading?reading.date:'(brak)',
-        currDate: reading?reading.date:'(brak)',
+        prevDate: prev?prev.date:'(brak)',
+        currDate: curr?curr.date:'(brak)',
         consumption: consumption,
         rate: unitRate,
         unit: MU[meter.type],
@@ -1771,25 +1731,13 @@ function generateSettlement(){
       });
     }
 
-    // Ścieki = (zużycie zimnej + ciepłej wody) × stawka
-    const coldConsumption=mediaItems.find(m=>m.type==='cold_water')?.consumption||0;
-    const hotConsumption=mediaItems.find(m=>m.type==='hot_water')?.consumption||0;
-    const sewageVolume=Math.round((coldConsumption+hotConsumption)*100)/100;
-    const sewageRate=rate('sewage')||0;
-    const sewageCost=Math.round(sewageVolume*sewageRate*100)/100;
-    totalMedia+=sewageCost;
-
-    // Podgrzanie wody = zużycie ciepłej wody × stawka podgrzania
-    const hotWaterHeatingRate=rate('hot_water_heating')||0;
-    const hotWaterHeatingCost=Math.round(hotConsumption*hotWaterHeatingRate*100)/100;
-    totalMedia+=hotWaterHeatingCost;
-
     // Garbage per person
     const persons=tenant?parseInt(tenant.persons)||1:1;
     const garbageCost=Math.round(persons*rate('garbage')*100)/100;
     totalMedia+=garbageCost;
 
-    const totalAll=Math.round(totalMedia*100)/100;
+    const rent=tenant?tenant.rent||0:0;
+    const totalAll=Math.round((rent+totalMedia)*100)/100;
 
     settlePreviewData.push({
       id: genId(),
@@ -1798,9 +1746,8 @@ function generateSettlement(){
       apartment: aptNum,
       tenantName: tenant?tenant.name:'(brak najemcy)',
       tenantId: tenant?tenant.id:null,
+      rent: rent,
       mediaItems: mediaItems,
-      sewageVolume, sewageRate, sewageCost,
-      hotWaterHeatingVolume: hotConsumption, hotWaterHeatingRate, hotWaterHeatingCost,
       garbageCost: garbageCost,
       garbagePersons: persons,
       garbageRate: rate('garbage'),
@@ -1825,13 +1772,13 @@ function renderSettlementPreview(){
 function renderSettlementCard(s, compact=false){
   const mediaRows=s.mediaItems.map(m=>`
     <tr>
-      <td style="white-space:nowrap">${MI[m.type]} ${ML[m.type]}</td>
-      <td style="font-size:0.85em;color:var(--text-light);white-space:nowrap">${m.serial||'—'}</td>
-      <td style="text-align:right;white-space:nowrap">${fmtN(m.prevValue)}</td>
-      <td style="text-align:right;white-space:nowrap">${fmtN(m.currValue)}</td>
-      <td style="text-align:right;font-weight:600;white-space:nowrap">${fmtN(m.consumption)} ${m.unit}</td>
-      <td style="text-align:right;white-space:nowrap">${fmtN(m.rate)} zł/${m.unit}</td>
-      <td style="text-align:right;font-weight:600;white-space:nowrap">${fmt(m.cost)}</td>
+      <td>${MI[m.type]} ${ML[m.type]}</td>
+      <td style="font-size:0.85em;color:var(--text-light)">${m.serial||'—'}</td>
+      <td style="text-align:right">${fmtN(m.prevValue)}</td>
+      <td style="text-align:right">${fmtN(m.currValue)}</td>
+      <td style="text-align:right;font-weight:600">${fmtN(m.consumption)} ${m.unit}</td>
+      <td style="text-align:right">${fmtN(m.rate)} zł/${m.unit}</td>
+      <td style="text-align:right;font-weight:600">${fmt(m.cost)}</td>
     </tr>
   `).join('');
 
@@ -1855,27 +1802,23 @@ function renderSettlementCard(s, compact=false){
           <tbody>
             ${mediaRows}
             <tr style="background:var(--primary-bg)">
-              <td style="white-space:nowrap">🚿 Ścieki</td><td></td><td></td><td></td>
-              <td style="text-align:right;white-space:nowrap">${fmtN(s.sewageVolume||0)} m³</td>
-              <td style="text-align:right;white-space:nowrap">${fmtN(s.sewageRate||0)} zł/m³</td>
-              <td style="text-align:right;font-weight:600;white-space:nowrap">${fmt(s.sewageCost||0)}</td>
-            </tr>
-            <tr style="background:var(--primary-bg)">
-              <td style="white-space:nowrap">🔥 Podgrzanie wody</td><td></td><td></td><td></td>
-              <td style="text-align:right;white-space:nowrap">${fmtN(s.hotWaterHeatingVolume||0)} m³</td>
-              <td style="text-align:right;white-space:nowrap">${fmtN(s.hotWaterHeatingRate||0)} zł/m³</td>
-              <td style="text-align:right;font-weight:600;white-space:nowrap">${fmt(s.hotWaterHeatingCost||0)}</td>
-            </tr>
-            <tr style="background:var(--primary-bg)">
-              <td style="white-space:nowrap">🗑️ Wywóz śmieci</td><td></td><td></td><td></td>
-              <td style="text-align:right;white-space:nowrap">${s.garbagePersons} os.</td>
-              <td style="text-align:right;white-space:nowrap">${fmtN(s.garbageRate)} zł/os.</td>
-              <td style="text-align:right;font-weight:600;white-space:nowrap">${fmt(s.garbageCost)}</td>
+              <td>🗑️ Wywóz śmieci</td><td></td><td></td><td></td>
+              <td style="text-align:right">${s.garbagePersons} os.</td>
+              <td style="text-align:right">${fmtN(s.garbageRate)} zł/os.</td>
+              <td style="text-align:right;font-weight:600">${fmt(s.garbageCost)}</td>
             </tr>
           </tbody>
           <tfoot>
+            <tr style="border-top:2px solid var(--border)">
+              <td colspan="6" style="text-align:right;font-weight:600">Media razem:</td>
+              <td style="text-align:right;font-weight:700">${fmt(s.totalMedia)}</td>
+            </tr>
+            <tr>
+              <td colspan="6" style="text-align:right;font-weight:600">Czynsz:</td>
+              <td style="text-align:right;font-weight:700">${fmt(s.rent)}</td>
+            </tr>
             <tr style="background:var(--primary);color:#fff;font-size:1.05em;">
-              <td colspan="6" style="text-align:right;font-weight:700;padding:10px 8px;">MEDIA RAZEM:</td>
+              <td colspan="6" style="text-align:right;font-weight:700;padding:10px 8px;">RAZEM DO ZAPŁATY:</td>
               <td style="text-align:right;font-weight:700;padding:10px 8px;">${fmt(s.totalAll)}</td>
             </tr>
           </tfoot>
@@ -1886,17 +1829,14 @@ function renderSettlementCard(s, compact=false){
 
 function saveSettlement(){
   if(!settlePreviewData.length){toast('Brak danych do zapisania','error');return;}
+  // Check for duplicates
   const month=settlePreviewData[0].month;
-  const hasExisting=DATA.settlements.some(x=>x.month===month);
-
-  if(hasExisting){
-    // Ask once for the whole month
-    if(!confirm(`Rozliczenia za ${settlePreviewData[0].monthLabel} już istnieją. Zaktualizować?`)) return;
-  }
-
   for(const s of settlePreviewData){
-    // Remove old entry for this apartment+month if exists
-    DATA.settlements=DATA.settlements.filter(x=>!(x.month===s.month && x.apartment===s.apartment));
+    const exists=DATA.settlements.find(x=>x.month===s.month && x.apartment===s.apartment);
+    if(exists){
+      if(!confirm(`Rozliczenie M${s.apartment} za ${s.monthLabel} już istnieje. Nadpisać?`)) continue;
+      DATA.settlements=DATA.settlements.filter(x=>!(x.month===s.month && x.apartment===s.apartment));
+    }
     DATA.settlements.push(s);
   }
   saveData(DATA);
@@ -1930,14 +1870,18 @@ function renderSettlementHistory(){
   });
 
   container.innerHTML=Object.entries(grouped).map(([month, group])=>{
+    const totalAll=group.items.reduce((sum,s)=>sum+s.totalAll,0);
     const totalMedia=group.items.reduce((sum,s)=>sum+s.totalMedia,0);
+    const totalRent=group.items.reduce((sum,s)=>sum+s.rent,0);
 
     const rows=group.items.map(s=>`
       <tr style="cursor:pointer;" onclick="viewSettlement('${s.id}')">
         <td><strong>M${s.apartment}</strong></td>
         <td>${s.tenantName}</td>
-        <td style="text-align:right;font-weight:700;color:var(--primary)">${fmt(s.totalMedia)}</td>
-        <td style="text-align:center;white-space:nowrap"><span style="cursor:pointer;color:var(--primary-light)" title="Szczegóły">📋</span> <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();sendSettlementEmail('${s.id}')">Wyślij</button></td>
+        <td style="text-align:right">${fmt(s.rent)}</td>
+        <td style="text-align:right">${fmt(s.totalMedia)}</td>
+        <td style="text-align:right;font-weight:700;color:var(--primary)">${fmt(s.totalAll)}</td>
+        <td style="text-align:center"><span style="cursor:pointer;color:var(--primary-light)" title="Szczegóły">📋</span></td>
       </tr>
     `).join('');
 
@@ -1946,12 +1890,14 @@ function renderSettlementHistory(){
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:2px solid var(--primary);margin-bottom:8px;">
           <div style="font-weight:700;font-size:1.1em;color:var(--primary)">${group.label}</div>
           <div style="display:flex;gap:20px;font-size:0.9em;">
-            <span style="font-size:1.05em;color:var(--primary)">Media razem: <strong>${fmt(totalMedia)}</strong></span>
+            <span>Czynsz: <strong>${fmt(totalRent)}</strong></span>
+            <span>Media: <strong>${fmt(totalMedia)}</strong></span>
+            <span style="font-size:1.05em;color:var(--primary)">Razem: <strong>${fmt(totalAll)}</strong></span>
           </div>
         </div>
         <div class="table-wrap">
           <table style="font-size:0.9em;">
-            <thead><tr><th>Lokal</th><th>Najemca</th><th style="text-align:right">Media</th><th style="text-align:center">Akcje</th></tr></thead>
+            <thead><tr><th>Lokal</th><th>Najemca</th><th style="text-align:right">Czynsz</th><th style="text-align:right">Media</th><th style="text-align:right">Razem</th><th style="text-align:center">Szczegóły</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -1964,7 +1910,17 @@ function viewSettlement(id){
   if(!s){toast('Nie znaleziono rozliczenia','error');return;}
   viewingSettleId=id;
   document.getElementById('settle-detail-title').textContent=`Rozliczenie M${s.apartment} — ${s.monthLabel}`;
-  document.getElementById('settle-detail-body').innerHTML=renderSettlementCard(s,true);
+  document.getElementById('settle-detail-body').innerHTML=renderSettlementCard(s,true)+`
+    <div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:var(--radius);font-size:0.85em;color:var(--text-light);">
+      <strong>Stawki zastosowane w tym rozliczeniu:</strong>
+      Zimna woda: ${s.rates?.cold_water||'?'} zł/m³ •
+      Ciepła woda: ${s.rates?.hot_water||'?'} zł/m³ •
+      Ogrzewanie: ${s.rates?.heating||'?'} zł/GJ •
+      Energia: ${s.rates?.electricity||'?'} zł/kWh •
+      Śmieci: ${s.rates?.garbage||'?'} zł/os. •
+      VAT: ${s.rates?.vat||'?'}%
+      <br>Wygenerowano: ${new Date(s.createdAt).toLocaleString('pl-PL')}
+    </div>`;
   openModal('settle-detail-modal');
 }
 
@@ -1979,10 +1935,9 @@ function deleteSettlement(){
   toast('Rozliczenie usunięte');
 }
 
-async function exportSettlementPDF(settleId, returnBlob){
-  const sid=settleId||viewingSettleId;
-  if(!sid) return;
-  const s=DATA.settlements.find(x=>x.id===sid);
+async function exportSettlementPDF(){
+  if(!viewingSettleId) return;
+  const s=DATA.settlements.find(x=>x.id===viewingSettleId);
   if(!s) return;
 
   const doc=await createPdfDoc({unit:'mm',format:'a4'});
@@ -2000,10 +1955,9 @@ async function exportSettlementPDF(settleId, returnBlob){
   // Owner info
   doc.setFontSize(9);
   doc.text('Wynajmujący:',lm,y);
-  const ownerLabel=DATA.owner.company&&DATA.owner.name&&DATA.owner.company!==DATA.owner.name?`${DATA.owner.company} \u2022 ${DATA.owner.name}`:DATA.owner.company||DATA.owner.name||'—';
-  doc.text(ownerLabel,lm+28,y);y+=5;
+  doc.text(`${DATA.owner.company} \u2022 ${DATA.owner.name}`,lm+28,y);y+=5;
   doc.text(`${DATA.owner.address}`,lm+28,y);y+=5;
-  if(DATA.owner.nip) {doc.text(`PESEL: ${DATA.owner.nip}`,lm+28,y);y+=5;}
+  if(DATA.owner.nip) {doc.text(`NIP: ${DATA.owner.nip}`,lm+28,y);y+=5;}
 
   // Tenant info
   doc.text('Najemca:',lm,y);
@@ -2034,20 +1988,6 @@ async function exportSettlementPDF(settleId, returnBlob){
     y+=5;
   });
 
-  // Sewage
-  doc.text('Ścieki',cols[0],y);
-  doc.text(`${fmtN(s.sewageVolume||0)} m³`,cols[3],y);
-  doc.text(`${fmtN(s.sewageRate||0)} zł/m³`,cols[4],y);
-  doc.text(`${fmtN(s.sewageCost||0)} zł`,cols[5],y);
-  y+=5;
-
-  // Hot water heating
-  doc.text('Podgrzanie wody',cols[0],y);
-  doc.text(`${fmtN(s.hotWaterHeatingVolume||0)} m³`,cols[3],y);
-  doc.text(`${fmtN(s.hotWaterHeatingRate||0)} zł/m³`,cols[4],y);
-  doc.text(`${fmtN(s.hotWaterHeatingCost||0)} zł`,cols[5],y);
-  y+=5;
-
   // Garbage
   doc.text(`Wywóz śmieci (${s.garbagePersons} os.)`,cols[0],y);
   doc.text(`${fmtN(s.garbageRate)} zł/os.`,cols[4],y);
@@ -2055,16 +1995,20 @@ async function exportSettlementPDF(settleId, returnBlob){
   y+=3;doc.line(lm,y,pw-rm,y);y+=6;
 
   // Totals
+  doc.text('Media razem:',cols[4],y);doc.text(`${fmtN(s.totalMedia)} zł`,cols[5],y);y+=5;
+  doc.text('Czynsz:',cols[4],y);doc.text(`${fmtN(s.rent)} zł`,cols[5],y);y+=3;
+  doc.line(cols[4],y,pw-rm,y);y+=6;
   doc.setFontSize(12);
-  doc.text('MEDIA RAZEM:',cols[3],y);doc.text(`${fmtN(s.totalAll)} zł`,cols[5],y);
+  doc.text('RAZEM DO ZAPŁATY:',cols[3],y);doc.text(`${fmtN(s.totalAll)} zł`,cols[5],y);
   y+=12;
 
-  y+=4;
+  // Rates footnote
   doc.setFontSize(7);doc.setTextColor(120,120,120);
+  doc.text(`Stawki: Woda zimna ${s.rates?.cold_water} zł/m³ | Woda ciepła ${s.rates?.hot_water} zł/m³ | Ogrzewanie ${s.rates?.heating} zł/GJ | Energia ${s.rates?.electricity} zł/kWh | Śmieci ${s.rates?.garbage} zł/os.`,lm,y);
+  y+=4;
   doc.text(`Wygenerowano: ${new Date(s.createdAt).toLocaleString('pl-PL')}`,lm,y);
   doc.setTextColor(0,0,0);
 
-  if(returnBlob) return doc.output('blob');
   doc.save(`Rozliczenie-M${s.apartment}-${s.month}.pdf`);
   toast('PDF zapisany');
 }
@@ -2075,9 +2019,8 @@ async function exportSettlementPDF(settleId, returnBlob){
 function loadSettings(){
   document.getElementById('rate-cold-water').value=DATA.rates.cold_water;document.getElementById('rate-hot-water').value=DATA.rates.hot_water;
   document.getElementById('rate-heating').value=DATA.rates.heating;document.getElementById('rate-electricity').value=DATA.rates.electricity;
-  document.getElementById('rate-sewage').value=DATA.rates.sewage||19.70;document.getElementById('rate-hot-water-heating').value=DATA.rates.hot_water_heating||46.80;
-  document.getElementById('rate-garbage').value=DATA.rates.garbage;
-  document.getElementById('owner-company').value=DATA.owner.company;
+  document.getElementById('rate-garbage').value=DATA.rates.garbage;document.getElementById('rate-vat').value=DATA.rates.vat;
+  document.getElementById('owner-company').value=DATA.owner.company;document.getElementById('owner-name').value=DATA.owner.name;
   document.getElementById('owner-nip').value=DATA.owner.nip;document.getElementById('owner-address').value=DATA.owner.address;
   document.getElementById('owner-email').value=DATA.owner.email;document.getElementById('owner-phone').value=DATA.owner.phone;
   document.getElementById('owner-bank1').value=DATA.owner.bank1;document.getElementById('owner-bank2').value=DATA.owner.bank2;
@@ -2085,12 +2028,11 @@ function loadSettings(){
 function saveRates(){
   DATA.rates={cold_water:+document.getElementById('rate-cold-water').value||0,hot_water:+document.getElementById('rate-hot-water').value||0,
     heating:+document.getElementById('rate-heating').value||0,electricity:+document.getElementById('rate-electricity').value||0,
-    sewage:+document.getElementById('rate-sewage').value||0,hot_water_heating:+document.getElementById('rate-hot-water-heating').value||0,
-    garbage:+document.getElementById('rate-garbage').value||0,vat:0};
+    garbage:+document.getElementById('rate-garbage').value||0,vat:+document.getElementById('rate-vat').value||23};
   saveData(DATA);toast('Stawki zapisane');
 }
 function saveOwner(){
-  DATA.owner={company:document.getElementById('owner-company').value,name:document.getElementById('owner-company').value,
+  DATA.owner={company:document.getElementById('owner-company').value,name:document.getElementById('owner-name').value,
     nip:document.getElementById('owner-nip').value,address:document.getElementById('owner-address').value,
     email:document.getElementById('owner-email').value,phone:document.getElementById('owner-phone').value,
     bank1:document.getElementById('owner-bank1').value,bank2:document.getElementById('owner-bank2').value};
