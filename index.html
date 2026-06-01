@@ -287,6 +287,10 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <select class="filter-input" id="reading-month-filter" onchange="renderReadings()"></select>
       <select class="filter-input" id="reading-apt-filter" onchange="renderReadings()"><option value="">Wszystkie mieszkania</option></select>
     </div>
+    <div id="bulk-move-bar" style="display:none;background:#fff3cd;border-left:4px solid #ffc107;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:0.9em">
+      <span id="bulk-move-info"></span>
+      <button class="btn btn-sm btn-primary" onclick="bulkMovePeriod()" style="margin-left:12px">↔ Przesuń wszystkie widoczne do innego okresu</button>
+    </div>
     <div class="card">
       <div class="table-wrap">
         <table><thead><tr><th>Okres rozl.</th><th>Data odczytu</th><th>Mieszkanie</th><th>Medium</th><th>Nr licznika</th><th>Odczyt poprz.</th><th>Odczyt akt.</th><th>Zużycie</th><th>Koszt</th><th>Źródło</th><th>Status</th><th>Akcje</th></tr></thead>
@@ -1296,6 +1300,16 @@ function renderReadings(){
       <td>${statusBadge}</td>
       <td>${moveBtn}${actionBtn}</td></tr>`;
   }).join('');
+
+  // Pasek masowego przesuwania — pokazuje liczbę niezablokowanych odczytów do przesunięcia
+  const movable = fl.filter(r=>r.source!=='initial' && !r.locked).length;
+  const bar = document.getElementById('bulk-move-bar');
+  if(movable>0){
+    bar.style.display='';
+    document.getElementById('bulk-move-info').innerHTML = `<strong>Filtr: ${month}</strong> — <strong>${movable}</strong> niezablokowanych odczytów. Jeśli są przypisane do złego miesiąca rozliczeniowego (np. stan z 01.05 to faktycznie zamknięcie kwietnia):`;
+  } else {
+    bar.style.display='none';
+  }
 }
 
 function openReadingModal(){
@@ -1339,6 +1353,40 @@ function deleteReading(id){
   if(r&&r.locked){return tryDeleteLockedReading(id);}
   if(!confirm('Usunąć ten odczyt?'))return;
   DATA.readings=DATA.readings.filter(r=>r.id!==id);saveData(DATA);renderReadings();toast('Usunięto');
+}
+
+function bulkMovePeriod(){
+  const month=document.getElementById('reading-month-filter').value;
+  const aptF=document.getElementById('reading-apt-filter').value;
+  // Te same kryteria filtra co w renderReadings
+  let fl=DATA.readings.filter(r=>{
+    const p = r.period || (r.date?r.date.substring(0,7):'');
+    return p === month;
+  });
+  if(aptF){const ids=DATA.meters.filter(m=>m.apartment===+aptF).map(m=>m.id);fl=fl.filter(r=>ids.includes(r.meterId));}
+  const movable = fl.filter(r=>r.source!=='initial' && !r.locked);
+  if(!movable.length){ toast('Brak niezablokowanych odczytów do przesunięcia','warn'); return; }
+
+  // Domyślnie sugeruj poprzedni miesiąc
+  const suggested = prevMonth(month);
+  const ans = prompt(`Przesuwasz ${movable.length} niezablokowanych odczytów z okresu ${month} do innego okresu rozliczeniowego.\n\nUWAGA: zmieniona zostanie tylko przynależność do miesiąca rozliczeniowego (period). Daty odczytów (date) ZOSTANĄ niezmienione.\n\nWpisz nowy okres w formacie RRRR-MM:`, suggested);
+  if(!ans)return;
+  if(!/^\d{4}-\d{2}$/.test(ans)){ toast('Zły format. Wpisz RRRR-MM, np. 2026-04','error'); return; }
+  if(ans===month){ toast('Ten sam okres — brak zmian','info'); return; }
+
+  if(!confirm(`Przenieść ${movable.length} odczytów z okresu ${month} → ${ans}?`)) return;
+
+  movable.forEach(r=>{ r.period = ans; });
+  saveData(DATA);
+  // Po przeniesieniu przełącz filtr na docelowy miesiąc, żeby Tomasz od razu widział efekt
+  const sel = document.getElementById('reading-month-filter');
+  // Dodaj opcję jeśli jej nie ma
+  if(![...sel.options].some(o=>o.value===ans)){
+    const opt = document.createElement('option'); opt.value=ans; opt.textContent=ans; sel.appendChild(opt);
+  }
+  sel.value = ans;
+  renderReadings(); renderDashboard();
+  toast(`✓ Przeniesiono ${movable.length} odczytów do okresu ${ans}`,'success');
 }
 
 function moveReadingPeriod(id){
