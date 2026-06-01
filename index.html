@@ -289,7 +289,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
     </div>
     <div class="card">
       <div class="table-wrap">
-        <table><thead><tr><th>Data</th><th>Mieszkanie</th><th>Medium</th><th>Nr licznika</th><th>Odczyt poprz.</th><th>Odczyt akt.</th><th>Zużycie</th><th>Koszt</th><th>Źródło</th><th>Status</th><th>Akcje</th></tr></thead>
+        <table><thead><tr><th>Okres rozl.</th><th>Data odczytu</th><th>Mieszkanie</th><th>Medium</th><th>Nr licznika</th><th>Odczyt poprz.</th><th>Odczyt akt.</th><th>Zużycie</th><th>Koszt</th><th>Źródło</th><th>Status</th><th>Akcje</th></tr></thead>
         <tbody id="readings-tbody"></tbody></table>
       </div>
     </div>
@@ -571,13 +571,20 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <button class="modal-close" onclick="closeModal('monthly-reading-modal')">&times;</button>
     </div>
     <div class="modal-body">
+      <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px;border-radius:6px;margin-bottom:12px;font-size:0.9em">
+        <strong>📌 Ważne — jak to działa:</strong><br>
+        Wybierasz <strong>MIESIĄC ROZLICZENIOWY</strong> — czyli miesiąc, którego zużycie chcesz rozliczyć.<br>
+        • Odczyt licznika z ostatniego dnia tego miesiąca = ZAMKNIĘCIE tego miesiąca.<br>
+        • Przykład: dziś jest 1 czerwca i chcesz rozliczyć MAJ → wybierz <code>2026-05</code> → wpisz stany odczytane 31.05.<br>
+        • Przykład: jeśli dane które wpisujesz pochodzą z 30.04 → wybierz <code>2026-04</code> (rozliczenie kwietnia).
+      </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Miesiąc rozliczeniowy</label>
+          <label class="form-label">Miesiąc rozliczeniowy (który zamykasz)</label>
           <input type="month" class="form-input" id="monthly-period" onchange="loadMonthlyReadings()">
         </div>
         <div class="form-group">
-          <label class="form-label">Data odczytu (zwykle ostatni dzień miesiąca)</label>
+          <label class="form-label">Data odczytu (ostatni dzień zamykanego miesiąca)</label>
           <input type="date" class="form-input" id="monthly-date">
         </div>
       </div>
@@ -652,7 +659,16 @@ const DEFAULT_DATA = {
 };
 
 function loadData() {
-  try { const r=localStorage.getItem(DB_KEY); if(!r) return structuredClone(DEFAULT_DATA); return {...structuredClone(DEFAULT_DATA),...JSON.parse(r)}; }
+  try {
+    const r=localStorage.getItem(DB_KEY);
+    const data = !r ? structuredClone(DEFAULT_DATA) : {...structuredClone(DEFAULT_DATA),...JSON.parse(r)};
+    // Migracja: każdy odczyt bez 'period' dostaje miesiąc rozliczeniowy z daty odczytu.
+    // Logika: stan licznika z 30.04 to ZAMKNIĘCIE kwietnia → period = '2026-04'.
+    (data.readings||[]).forEach(r=>{
+      if(!r.period && r.date && r.source!=='initial'){ r.period = r.date.substring(0,7); }
+    });
+    return data;
+  }
   catch(e){ return structuredClone(DEFAULT_DATA); }
 }
 function saveData(d){
@@ -1247,11 +1263,15 @@ function renderReadings(){
   populateFilters();
   const month=document.getElementById('reading-month-filter').value;
   const aptF=document.getElementById('reading-apt-filter').value;
-  let fl=DATA.readings.filter(r=>r.date&&r.date.startsWith(month));
+  // Filtr po OKRESIE ROZLICZENIOWYM (period), z fallback na datę odczytu dla starych rekordów
+  let fl=DATA.readings.filter(r=>{
+    const p = r.period || (r.date?r.date.substring(0,7):'');
+    return p === month;
+  });
   if(aptF){const ids=DATA.meters.filter(m=>m.apartment===+aptF).map(m=>m.id);fl=fl.filter(r=>ids.includes(r.meterId));}
 
   const tb=document.getElementById('readings-tbody');
-  if(!fl.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-light)">Brak odczytów.</td></tr>';return;}
+  if(!fl.length){tb.innerHTML='<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text-light)">Brak odczytów za okres '+month+'.</td></tr>';return;}
 
   tb.innerHTML=fl.sort((a,b)=>{const ma=DATA.meters.find(m=>m.id===a.meterId),mb=DATA.meters.find(m=>m.id===b.meterId);return(ma?.apartment||0)-(mb?.apartment||0);}).map(r=>{
     const m=DATA.meters.find(x=>x.id===r.meterId);if(!m)return'';
@@ -1264,15 +1284,17 @@ function renderReadings(){
     const rowStyle=isInitial?'opacity:0.7;font-style:italic;':'';
     const locked=!!r.locked;
     const statusBadge=locked?`<span class="apt-tile-badge badge-ok" title="Odczyt zamknięty — nie można zmienić">🔒 Zamknięty</span>`:`<span class="apt-tile-badge badge-neutral">Otwarty</span>`;
+    const moveBtn = !isInitial ? `<button class="btn btn-sm btn-outline" onclick="moveReadingPeriod('${r.id}')" title="Przypisz do innego miesiąca rozliczeniowego" style="margin-right:4px">↔</button>` : '';
     const actionBtn=locked
       ? `<button class="btn btn-sm btn-outline" onclick="tryDeleteLockedReading('${r.id}')" title="Wymaga odblokowania">🔒</button>`
       : `<button class="btn btn-sm btn-danger" onclick="deleteReading('${r.id}')">Usuń</button>`;
-    return `<tr style="${rowStyle}"><td>${r.date}</td><td><strong>M${m.apartment}</strong></td><td>${MI[m.type]} ${ML[m.type]}</td><td><code>${m.serial}</code></td>
+    const periodCell = isInitial ? '<em style="color:var(--text-light)">stan pocz.</em>' : `<strong>${r.period||r.date.substring(0,7)}</strong>`;
+    return `<tr style="${rowStyle}"><td>${periodCell}</td><td>${r.date}</td><td><strong>M${m.apartment}</strong></td><td>${MI[m.type]} ${ML[m.type]}</td><td><code>${m.serial}</code></td>
       <td>${isInitial?'—':(r.previousValue!==null?fmtN(r.previousValue):'—')}</td><td><strong>${fmtN(r.value)}</strong></td>
       <td>${isInitial?'— bazowy —':fmtN(u)+' '+MU[m.type]}</td><td>${isInitial?'—':`<strong>${fmt(c)}</strong>`}</td>
       <td><span class="apt-tile-badge ${srcClass}">${srcLabel}</span></td>
       <td>${statusBadge}</td>
-      <td>${actionBtn}</td></tr>`;
+      <td>${moveBtn}${actionBtn}</td></tr>`;
   }).join('');
 }
 
@@ -1306,7 +1328,7 @@ function saveReading(){
     const v=parseFloat(inp.value);if(isNaN(v))return;
     const prev=parseFloat(inp.dataset.prev)||0;
     if(v<prev){toast(`Odczyt nie może być mniejszy od ${prev}`,'error');return;}
-    DATA.readings.push({id:genId(),meterId:inp.dataset.meterId,date,value:v,previousValue:prev,source:'manual'});
+    DATA.readings.push({id:genId(),meterId:inp.dataset.meterId,date,value:v,previousValue:prev,source:'manual',period:date.substring(0,7)});
     c++;
   });
   if(!c){toast('Wprowadź co najmniej jeden odczyt','error');return;}
@@ -1317,6 +1339,19 @@ function deleteReading(id){
   if(r&&r.locked){return tryDeleteLockedReading(id);}
   if(!confirm('Usunąć ten odczyt?'))return;
   DATA.readings=DATA.readings.filter(r=>r.id!==id);saveData(DATA);renderReadings();toast('Usunięto');
+}
+
+function moveReadingPeriod(id){
+  const r=DATA.readings.find(x=>x.id===id); if(!r)return;
+  const m=DATA.meters.find(x=>x.id===r.meterId);
+  if(r.locked){ toast('Odczyt zamknięty — najpierw odblokuj (przycisk 🔒)','warn'); return; }
+  const current=r.period||(r.date?r.date.substring(0,7):'');
+  const ans=prompt(`Przenieś odczyt do innego miesiąca rozliczeniowego.\n\nLicznik: ${m?.serial} (M${m?.apartment} ${ML[m?.type]})\nData odczytu: ${r.date}\nWartość: ${fmtN(r.value)}\nObecny okres rozliczeniowy: ${current}\n\nWpisz nowy okres w formacie RRRR-MM (np. 2026-04 dla kwietnia 2026):`, current);
+  if(!ans)return;
+  if(!/^\d{4}-\d{2}$/.test(ans)){ toast('Zły format. Wpisz RRRR-MM, np. 2026-04','error'); return; }
+  r.period=ans;
+  saveData(DATA); renderReadings(); renderDashboard();
+  toast(`Odczyt przeniesiony do okresu ${ans}`,'success');
 }
 
 function tryDeleteLockedReading(id){
@@ -1360,9 +1395,10 @@ function prevMonth(periodYM){
 }
 
 function openMonthlyReadingModal(){
-  const cur=curMonth();
-  document.getElementById('monthly-period').value=cur;
-  document.getElementById('monthly-date').value=lastDayOfMonth(cur);
+  // Domyślny okres rozliczeniowy = POPRZEDNI miesiąc (najczęściej zamykamy poprzedni)
+  const prev=prevMonth(curMonth());
+  document.getElementById('monthly-period').value=prev;
+  document.getElementById('monthly-date').value=lastDayOfMonth(prev);
   loadMonthlyReadings();
   openModal('monthly-reading-modal');
 }
