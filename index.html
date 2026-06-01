@@ -145,21 +145,6 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
 .filters-row { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
 .filter-input { padding:8px 14px; border:2px solid var(--border); border-radius:8px; font-size:0.9em; }
 
-/* DROPZONE */
-.dropzone { border:3px dashed var(--border); border-radius:var(--radius); padding:40px 20px; text-align:center; color:var(--text-light); cursor:pointer; transition:all .2s; background:#FAFBFC; }
-.dropzone:hover, .dropzone.dragover { border-color:var(--primary-light); background:var(--primary-bg); color:var(--primary); }
-.dropzone svg { width:48px; height:48px; margin-bottom:12px; opacity:0.5; }
-.dropzone p { font-size:1em; margin-bottom:4px; }
-.dropzone small { font-size:0.8em; }
-
-/* OCR RESULTS */
-.ocr-result-card { background:var(--card); border:2px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
-.ocr-result-card.matched { border-color:var(--accent); }
-.ocr-result-card.unmatched { border-color:var(--warning); }
-.ocr-result-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-.ocr-thumb { width:80px; height:80px; object-fit:cover; border-radius:8px; cursor:pointer; }
-.ocr-value { font-size:1.4em; font-weight:800; color:var(--primary); }
-
 /* METER ASSIGNMENT TABLE */
 .meter-assign-table input { width:100%; padding:8px; border:2px solid var(--border); border-radius:6px; font-size:0.9em; font-family:monospace; }
 .meter-assign-table input:focus { border-color:var(--primary-light); outline:none; }
@@ -169,10 +154,6 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
 .progress-bar { width:100%; height:8px; background:var(--border); border-radius:4px; overflow:hidden; margin:12px 0; }
 .progress-fill { height:100%; background:var(--primary-light); border-radius:4px; transition:width .3s; }
 
-/* GOOGLE DRIVE */
-.gdrive-status { display:flex; align-items:center; gap:8px; padding:12px 16px; border-radius:8px; font-size:0.9em; }
-.gdrive-connected { background:#D5F5E3; color:#1E8449; }
-.gdrive-disconnected { background:#FADBD8; color:#C0392B; }
 </style>
 </head>
 <body>
@@ -187,7 +168,6 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="nav-tab active" data-page="dashboard">Dashboard</div>
       <div class="nav-tab" data-page="tenants">Najemcy</div>
       <div class="nav-tab" data-page="meters">Liczniki</div>
-      <div class="nav-tab" data-page="ocr">OCR Zdjęcia</div>
       <div class="nav-tab" data-page="readings">Odczyty</div>
       <div class="nav-tab" data-page="invoices">Rachunki</div>
       <div class="nav-tab" data-page="settlements">Rozliczenia</div>
@@ -291,52 +271,6 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
         <table><thead><tr><th>Mieszkanie</th><th>Typ medium</th><th>Nr seryjny</th><th>Jednostka</th><th>Ostatni odczyt</th><th>Legalizacja do</th><th>Akcje</th></tr></thead>
         <tbody id="meters-tbody"></tbody></table>
       </div>
-    </div>
-  </div>
-
-  <!-- ══════════ OCR ZDJECIA ══════════ -->
-  <div class="page" id="page-ocr">
-    <div class="section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-      OCR — Odczyt liczników ze zdjęć
-    </div>
-
-    <!-- Klucz API -->
-    <div class="card">
-      <div class="form-row" style="align-items:flex-end;">
-        <div class="form-group" style="flex:1">
-          <label class="form-label">Klucz API Google Cloud Vision</label>
-          <input type="password" class="form-input" id="gcv-api-key" placeholder="AIza...">
-        </div>
-        <div class="form-group" style="flex:0">
-          <button class="btn btn-outline" onclick="saveOCRSettings()">Zapisz klucz API</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Upload zdjęć -->
-    <div class="card">
-      <div class="card-title" style="margin-bottom:12px">Wrzuć zdjęcia liczników</div>
-      <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-        <p>Przeciągnij zdjęcia liczników tutaj</p>
-        <small>lub kliknij aby wybrać pliki (JPG, PNG)</small>
-      </div>
-      <input type="file" id="file-input" multiple accept="image/*" style="display:none" onchange="handleFileSelect(event)">
-    </div>
-
-    <!-- Wyniki OCR -->
-    <div class="card" id="ocr-results-card" style="display:none">
-      <div class="card-header">
-        <div class="card-title">Wyniki rozpoznawania OCR</div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-success" onclick="applyAllOCR()">Zastosuj wszystkie odczyty</button>
-          <button class="btn btn-outline" onclick="clearOCR()">Wyczyść</button>
-        </div>
-      </div>
-      <div class="progress-bar" id="ocr-progress" style="display:none"><div class="progress-fill" id="ocr-progress-fill"></div></div>
-      <p id="ocr-status" style="font-size:0.85em;color:var(--text-light);margin-bottom:16px;"></p>
-      <div id="ocr-results"></div>
     </div>
   </div>
 
@@ -678,9 +612,7 @@ const DEFAULT_DATA = {
   rates: { cold_water:12.50, hot_water:28.00, heating:85.00, electricity:1.05, sewage:19.70, hot_water_heating:46.80, garbage:35.00, vat:0 },
   owner: { company:'EVENTUS sp. z o.o.', name:'Tomasz Słomski', nip:'', address:'Aleja Brzozowa 77, 89-600 Chojnice', email:'tradetomek@gmail.com', phone:'', bank1:'', bank2:'' },
   settlements: [],
-  nextInvoiceNum: 1,
-  gcvApiKey: '',
-  ocrResults: []
+  nextInvoiceNum: 1
 };
 
 function loadData() {
@@ -843,7 +775,6 @@ async function doFirestoreSync(d){
   try{
     const dataToSync=JSON.parse(JSON.stringify(d));
     dataToSync.tenants.forEach(t=>{delete t.contractPdf;});
-    if(dataToSync.ocrResults) dataToSync.ocrResults.forEach(r=>{delete r.thumb;});
 
     await db.collection('users').doc(firebaseUser.uid).set({
       appData:dataToSync,
@@ -908,7 +839,6 @@ if(db){
         const cloudStr=JSON.stringify(cloudData);
         const localCopy=JSON.parse(JSON.stringify(DATA));
         localCopy.tenants.forEach(t=>{delete t.contractPdf;});
-        if(localCopy.ocrResults) localCopy.ocrResults.forEach(r=>{delete r.thumb;});
         if(JSON.stringify(localCopy)===cloudStr) return; // No change
 
         isSyncingFromCloud=true;
@@ -1009,7 +939,6 @@ function refresh(p){
     case 'dashboard': renderDashboard(); break;
     case 'tenants': renderTenants(); break;
     case 'meters': renderMeterAssign(); renderMeters(); break;
-    case 'ocr': loadOCRSettings(); break;
     case 'readings': renderReadings(); break;
     case 'invoices': renderInvoices(); break;
     case 'settlements': initSettlements(); break;
@@ -1369,385 +1298,6 @@ function saveMeter(){
 function editMeter(id){openMeterModal(id);}
 function deleteMeter(id){if(!confirm('Usunąć licznik?'))return;DATA.meters=DATA.meters.filter(m=>m.id!==id);saveData(DATA);renderMeterAssign();renderMeters();toast('Usunięto');}
 
-// ═══════════════════════════════════════════════════════════════
-// OCR — GOOGLE CLOUD VISION + UPLOAD
-// ═══════════════════════════════════════════════════════════════
-let ocrQueue = [];
-let gdriveToken = null;
-
-function loadOCRSettings(){
-  document.getElementById('gcv-api-key').value = DATA.gcvApiKey||'';
-  updateGDriveStatus();
-}
-function saveOCRSettings(){
-  DATA.gcvApiKey = document.getElementById('gcv-api-key').value.trim();
-  saveData(DATA);
-  toast('Klucz API zapisany');
-}
-function updateGDriveStatus(){
-  const el=document.getElementById('gdrive-status-indicator');
-  if(gdriveToken){ el.innerHTML='<div class="gdrive-status gdrive-connected">✓ Połączono z Google Drive</div>';
-    document.getElementById('btn-fetch-gdrive').disabled=false;
-  } else { el.innerHTML='<div class="gdrive-status gdrive-disconnected">✗ Nie połączono</div>';
-    document.getElementById('btn-fetch-gdrive').disabled=true;
-  }
-}
-
-// Google Drive OAuth
-function connectGoogleDrive(){
-  toast('Google Drive wymaga konfiguracji OAuth w Google Cloud Console. Na razie użyj drag & drop do wrzucenia zdjęć.','info');
-  // In production, this would use Google Identity Services:
-  // google.accounts.oauth2.initTokenClient({...}).requestAccessToken();
-}
-
-async function fetchFromGDrive(){
-  if(!gdriveToken){toast('Najpierw połącz się z Google Drive','error');return;}
-  toast('Pobieranie zdjęć z Google Drive...','info');
-  // Production: fetch from Google Drive API with gdriveToken
-}
-
-// Drag & Drop
-const dz=document.getElementById('dropzone');
-dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
-dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
-dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
-
-function handleFileSelect(e){handleFiles(e.target.files);e.target.value='';}
-
-// Compress image before sending to API (iPhone photos can be 5-10MB)
-function compressImage(dataUrl, maxWidth=1600, quality=0.8){
-  return new Promise((resolve)=>{
-    const img=new Image();
-    img.onload=()=>{
-      const canvas=document.createElement('canvas');
-      let w=img.width, h=img.height;
-      if(w>maxWidth){ h=Math.round(h*maxWidth/w); w=maxWidth; }
-      canvas.width=w; canvas.height=h;
-      const ctx=canvas.getContext('2d');
-      ctx.drawImage(img,0,0,w,h);
-      const compressed=canvas.toDataURL('image/jpeg',quality);
-      resolve({dataUrl:compressed, base64:compressed.split(',')[1]});
-    };
-    img.onerror=()=>resolve({dataUrl,base64:dataUrl.split(',')[1]});
-    img.src=dataUrl;
-  });
-}
-
-function handleFiles(files){
-  const images=[...files].filter(f=>f.type.startsWith('image/'));
-  if(!images.length){toast('Nie znaleziono plików graficznych','error');return;}
-  ocrQueue=[];
-  let loaded=0;
-  toast(`Wczytywanie ${images.length} zdjęć...`,'info');
-  images.forEach(f=>{
-    const reader=new FileReader();
-    reader.onload=async ev=>{
-      // Compress before OCR — reduces 5MB iPhone photo to ~200KB
-      const compressed=await compressImage(ev.target.result);
-      ocrQueue.push({name:f.name, dataUrl:compressed.dataUrl, base64:compressed.base64});
-      loaded++;
-      if(loaded===images.length) processOCR();
-    };
-    reader.readAsDataURL(f);
-  });
-}
-
-async function processOCR(){
-  const apiKey=DATA.gcvApiKey||document.getElementById('gcv-api-key').value.trim();
-  if(!apiKey){
-    toast('Brak klucza API Google Cloud Vision. Wpisz klucz w ustawieniach OCR.','error');
-    showManualOCR();
-    return;
-  }
-  DATA.gcvApiKey=apiKey; saveData(DATA);
-
-  const card=document.getElementById('ocr-results-card'); card.style.display='block';
-  const prog=document.getElementById('ocr-progress'); prog.style.display='block';
-  const results=document.getElementById('ocr-results'); results.innerHTML='';
-  const status=document.getElementById('ocr-status');
-
-  DATA.ocrResults=[];
-  for(let i=0;i<ocrQueue.length;i++){
-    const item=ocrQueue[i];
-    const sizeKB=Math.round(item.base64.length*3/4/1024);
-    status.textContent=`Przetwarzanie ${i+1}/${ocrQueue.length}: ${item.name} (${sizeKB} KB)...`;
-    document.getElementById('ocr-progress-fill').style.width=((i+1)/ocrQueue.length*100)+'%';
-
-    try {
-      const controller=new AbortController();
-      const timeout=setTimeout(()=>controller.abort(),30000); // 30s timeout
-
-      const resp=await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        signal:controller.signal,
-        body:JSON.stringify({requests:[{image:{content:item.base64},features:[{type:'TEXT_DETECTION',maxResults:10}]}]})
-      });
-      clearTimeout(timeout);
-
-      if(!resp.ok){
-        const errBody=await resp.text();
-        let errMsg=`HTTP ${resp.status}`;
-        try{ const ej=JSON.parse(errBody); errMsg=ej.error?.message||errMsg; }catch(e){}
-        if(resp.status===403) errMsg='Brak dostępu — włącz Cloud Vision API: console.cloud.google.com → APIs & Services → Library → wyszukaj "Cloud Vision API" → Enable. Sprawdź też czy billing jest aktywny.';
-        if(resp.status===400) errMsg='Nieprawidłowe żądanie — sprawdź klucz API';
-        if(resp.status===429) errMsg='Przekroczono limit zapytań — spróbuj za chwilę';
-        throw new Error(errMsg);
-      }
-
-      const data=await resp.json();
-
-      if(data.error){throw new Error(data.error.message);}
-      if(data.responses&&data.responses[0]?.error){throw new Error(data.responses[0].error.message);}
-
-      const texts=data.responses[0]?.textAnnotations;
-      if(!texts||!texts.length){
-        DATA.ocrResults.push({file:item.name,thumb:item.dataUrl,rawText:'',detectedValue:null,detectedSerial:null,matched:false,meterId:null});
-        continue;
-      }
-
-      const fullText=texts[0].description;
-
-      // === PRIORITY 1: Find value with UNIT (kWh, m³, m3, GJ, MWh) ===
-      // This is the most reliable way — the number right before the unit IS the reading
-      const unitPatterns=[
-        /(\d{1,8}[.,]\d{1,3})\s*kWh/gi,
-        /(\d{1,8}[.,]\d{1,3})\s*m[³3]/gi,
-        /(\d{1,8}[.,]\d{1,3})\s*GJ/gi,
-        /(\d{1,8}[.,]\d{1,3})\s*MWh/gi,
-        /(\d{3,8})\s*kWh/gi,
-        /(\d{3,8})\s*m[³3]/gi,
-        /(\d{3,8})\s*GJ/gi,
-        /(\d{3,8})\s*MWh/gi,
-      ];
-      let unitValue=null;
-      for(const pat of unitPatterns){
-        const um=pat.exec(fullText);
-        if(um){
-          unitValue=parseFloat(um[1].replace(',','.'));
-          break;
-        }
-      }
-
-      // === PRIORITY 2: Extract all numbers as fallback ===
-      // Include smaller numbers too (e.g. 0,49 for heating) — minimum 1 digit before decimal
-      const numbers=fullText.match(/\d{1,8}[.,]\d{1,3}|\d{3,8}/g)||[];
-      // Try to find meter serial — usually alphanumeric pattern
-      const serials=fullText.match(/[A-Z]{1,3}[-\s]?\d{3,10}[-\s]?\d{0,6}/gi)||[];
-      // Also catch "Nr XXXXX" patterns as serials
-      const nrSerials=fullText.match(/[Nn][Rr]\.?\s*(\d{5,12})/g)||[];
-      nrSerials.forEach(s=>{if(!serials.includes(s)) serials.push(s);});
-
-      // Match serial to known meters
-      let matchedMeter=null;
-      let matchedSerial=null;
-      for(const s of serials){
-        const cleaned=s.replace(/[\s-]/g,'').toUpperCase();
-        const found=DATA.meters.find(m=>m.serial.replace(/[\s-]/g,'').toUpperCase()===cleaned);
-        if(found){matchedMeter=found;matchedSerial=s;break;}
-      }
-
-      // If no serial match, try matching by all serials in the text
-      if(!matchedMeter){
-        for(const m of DATA.meters){
-          if(fullText.toUpperCase().includes(m.serial.toUpperCase())){
-            matchedMeter=m; matchedSerial=m.serial; break;
-          }
-        }
-      }
-
-      // Build list of serial numbers to EXCLUDE from value candidates
-      const serialExclusions=new Set();
-      // Add all known meter serials (digits only)
-      DATA.meters.forEach(m=>{
-        if(m.serial){
-          const digits=m.serial.replace(/\D/g,'');
-          if(digits) serialExclusions.add(digits);
-          // Also add the full serial cleaned
-          serialExclusions.add(m.serial.replace(/[\s-]/g,'').toUpperCase());
-        }
-      });
-      // Add detected serials from OCR text
-      serials.forEach(s=>{
-        const digits=s.replace(/\D/g,'');
-        if(digits) serialExclusions.add(digits);
-      });
-
-      // Pick meter value — PRIORITY: use unitValue if found
-      let detectedValue=null;
-
-      if(unitValue!==null && !isNaN(unitValue)){
-        // === Best case: found number with unit (e.g. "5322,3 kWh") ===
-        detectedValue=unitValue;
-        console.log('OCR: Użyto wartości z jednostką:',detectedValue);
-      } else if(numbers.length){
-        // === Fallback: pick from all numbers, excluding serials ===
-        const candidates=numbers
-          .map(n=>({raw:n, val:parseFloat(n.replace(',','.'))}))
-          .filter(n=>!isNaN(n.val))
-          .filter(n=>{
-            const digits=n.raw.replace(/\D/g,'');
-            for(const excl of serialExclusions){
-              if(excl.includes(digits)||digits.includes(excl)) return false;
-            }
-            return true;
-          })
-          .filter(n=>n.val>=0.001 && n.val<=9999999)
-          .sort((a,b)=>b.val-a.val);
-
-        if(matchedMeter){
-          const lr=lastReading(matchedMeter.id);
-          if(lr && lr.value>0){
-            // PRIORITY: find numbers >= last reading (meter always goes up)
-            const valid=candidates.filter(n=>n.val>=lr.value);
-            if(valid.length){
-              // Pick the one closest to last reading (smallest increase = most likely current reading)
-              valid.sort((a,b)=>Math.abs(a.val-lr.value)-Math.abs(b.val-lr.value));
-              detectedValue=valid[0].val;
-              console.log('OCR: Wybrano wartość najbliższą do ostatniego odczytu:',detectedValue,'(ostatni:',lr.value,')');
-            } else {
-              // No value >= last reading, pick the largest candidate (most likely to be meter reading)
-              detectedValue=candidates.length?candidates[0].val:null;
-              console.log('OCR: Brak wartości >= ostatni odczyt, wybrano największą:',detectedValue);
-            }
-          } else {
-            // No last reading — pick largest number (likely the meter reading)
-            detectedValue=candidates.length?candidates[0].val:null;
-          }
-        } else {
-          // No matched meter — pick largest number
-          detectedValue=candidates.length?candidates[0].val:null;
-        }
-      }
-
-      DATA.ocrResults.push({
-        file:item.name, thumb:item.dataUrl, rawText:fullText,
-        detectedValue, detectedSerial:matchedSerial,
-        matched:!!matchedMeter, meterId:matchedMeter?.id||null,
-        meterApt:matchedMeter?.apartment||null, meterType:matchedMeter?.type||null
-      });
-
-    } catch(err){
-      console.error('OCR error:',err);
-      let userMsg=err.message;
-      if(err.name==='AbortError') userMsg='Przekroczono czas oczekiwania (30s) — sprawdź połączenie internetowe i spróbuj ponownie';
-      if(err.message.includes('Failed to fetch')||err.message.includes('NetworkError')) userMsg='Brak połączenia z serwerem Google — sprawdź internet';
-      DATA.ocrResults.push({file:item.name,thumb:item.dataUrl,rawText:'BŁĄD: '+userMsg,detectedValue:null,detectedSerial:null,matched:false,meterId:null,error:true});
-      toast('Błąd OCR: '+userMsg,'error');
-    }
-  }
-
-  saveData(DATA);
-  const recognized=DATA.ocrResults.filter(r=>r.detectedValue).length;
-  const errors=DATA.ocrResults.filter(r=>r.error).length;
-  if(errors>0){
-    status.textContent=`Zakończono z ${errors} błęd${errors===1?'em':'ami'}. Rozpoznano ${recognized}/${DATA.ocrResults.length} wartości.`;
-    status.style.color='#e74c3c';
-  } else {
-    status.textContent=`Zakończono. Rozpoznano ${recognized}/${DATA.ocrResults.length} wartości.`;
-    status.style.color='#27ae60';
-  }
-  prog.style.display='none';
-  renderOCRResults();
-}
-
-function showManualOCR(){
-  DATA.ocrResults=ocrQueue.map(item=>({
-    file:item.name, thumb:item.dataUrl, rawText:'', detectedValue:null,
-    detectedSerial:null, matched:false, meterId:null, manual:true
-  }));
-  document.getElementById('ocr-results-card').style.display='block';
-  document.getElementById('ocr-status').textContent='Brak klucza API — wpisz wartości ręcznie przy każdym zdjęciu.';
-  renderOCRResults();
-}
-
-function renderOCRResults(){
-  const c=document.getElementById('ocr-results');
-  if(!DATA.ocrResults.length){c.innerHTML='<p style="color:var(--text-light)">Brak wyników.</p>';return;}
-
-  c.innerHTML=DATA.ocrResults.map((r,i)=>{
-    const meter=r.meterId?DATA.meters.find(m=>m.id===r.meterId):null;
-    const meterOptions=DATA.meters.map(m=>`<option value="${m.id}" ${m.id===r.meterId?'selected':''}>${MI[m.type]} M${m.apartment} — ${ML[m.type]} (${m.serial})</option>`).join('');
-
-    return `<div class="ocr-result-card ${r.matched?'matched':r.error?'':'unmatched'}">
-      <div style="display:flex;gap:16px;flex-wrap:wrap;">
-        <div style="flex:0 0 auto;text-align:center;">
-          <img src="${r.thumb}" style="max-width:200px;max-height:200px;border-radius:8px;cursor:pointer;object-fit:contain;border:1px solid var(--border);" onclick="showImage('${r.thumb}')" alt="${r.file}">
-          <div style="font-size:0.8em;color:var(--text-light);margin-top:4px;">${r.file}</div>
-        </div>
-        <div style="flex:1;min-width:250px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div>
-              ${r.matched?`<span style="font-size:0.85em;color:var(--accent)">✓ Rozpoznano: M${r.meterApt} ${ML[r.meterType]||''}</span>`:
-                r.error?`<span style="font-size:0.85em;color:var(--danger)">✗ Błąd OCR</span>`:
-                `<span style="font-size:0.85em;color:var(--warning)">⚠ Przypisz licznik ręcznie</span>`}
-            </div>
-            <div class="ocr-value">${r.detectedValue!==null?fmtN(r.detectedValue):'?'}</div>
-          </div>
-          <div class="form-group" style="margin-bottom:8px">
-            <label class="form-label">Przypisany licznik</label>
-            <select class="form-input" id="ocr-meter-${i}" onchange="updateOCRMatch(${i},this.value)">
-              <option value="">— wybierz licznik —</option>
-              ${meterOptions}
-            </select>
-          </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label class="form-label">Wartość odczytu</label>
-            <input type="number" step="0.01" class="form-input" id="ocr-value-${i}" value="${r.detectedValue||''}" placeholder="wpisz wartość">
-          </div>
-          ${r.rawText&&!r.error?`<details style="margin-top:8px"><summary style="font-size:0.8em;color:var(--text-light);cursor:pointer">Rozpoznany tekst</summary><pre style="font-size:0.75em;background:#f5f5f5;padding:8px;border-radius:6px;white-space:pre-wrap;max-height:80px;overflow-y:auto">${r.rawText}</pre></details>`:''}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function updateOCRMatch(idx,meterId){
-  if(!meterId)return;
-  const m=DATA.meters.find(x=>x.id===meterId);
-  if(m){DATA.ocrResults[idx].meterId=meterId;DATA.ocrResults[idx].matched=true;DATA.ocrResults[idx].meterApt=m.apartment;DATA.ocrResults[idx].meterType=m.type;}
-  saveData(DATA);
-}
-
-function showImage(src){
-  document.getElementById('image-modal-img').src=src;
-  openModal('image-modal');
-}
-
-function applyAllOCR(){
-  let applied=0;
-  DATA.ocrResults.forEach((r,i)=>{
-    const meterId=document.getElementById('ocr-meter-'+i)?.value||r.meterId;
-    const value=parseFloat(document.getElementById('ocr-value-'+i)?.value);
-    if(!meterId||isNaN(value))return;
-
-    const meter=DATA.meters.find(m=>m.id===meterId);
-    if(!meter)return;
-
-    const prev=lastReading(meterId);
-    if(prev&&value<prev.value){
-      toast(`M${meter.apartment} ${ML[meter.type]}: wartość ${fmtN(value)} mniejsza od poprzedniej (${fmtN(prev.value)}) — pominięto`,'error');
-      return;
-    }
-
-    DATA.readings.push({
-      id:genId(), meterId, date:today(), value, previousValue:prev?prev.value:0, source:'ocr'
-    });
-    applied++;
-  });
-
-  if(applied===0){toast('Brak odczytów do zastosowania','error');return;}
-  saveData(DATA);
-  toast(`Zastosowano ${applied} odczytów z OCR`);
-  renderDashboard();
-}
-
-function clearOCR(){
-  DATA.ocrResults=[];ocrQueue=[];
-  document.getElementById('ocr-results-card').style.display='none';
-  document.getElementById('ocr-results').innerHTML='';
-  saveData(DATA);
-}
 
 // ═══════════════════════════════════════════════════════════════
 // READINGS
@@ -1782,8 +1332,8 @@ function renderReadings(){
     const isInitial=r.source==='initial';
     const u=(!isInitial&&r.previousValue!==null)?(r.value-r.previousValue):0;
     const c=isInitial?0:u*rate(m.type);
-    const srcLabel=r.source==='initial'?'Stan pocz.':r.source==='ocr'?'OCR':'Ręczny';
-    const srcClass=r.source==='initial'?'badge-warn':r.source==='ocr'?'badge-ok':'badge-neutral';
+    const srcLabel=r.source==='initial'?'Stan pocz.':'Ręczny';
+    const srcClass=r.source==='initial'?'badge-warn':'badge-neutral';
     const rowStyle=isInitial?'opacity:0.7;font-style:italic;':'';
     return `<tr style="${rowStyle}"><td>${r.date}</td><td><strong>M${m.apartment}</strong></td><td>${MI[m.type]} ${ML[m.type]}</td><td><code>${m.serial}</code></td>
       <td>${isInitial?'—':(r.previousValue!==null?fmtN(r.previousValue):'—')}</td><td><strong>${fmtN(r.value)}</strong></td>
