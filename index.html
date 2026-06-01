@@ -126,6 +126,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
 .toast-error { background:var(--danger); }
 .toast-info { background:var(--primary); }
 @keyframes slideIn { from{transform:translateX(100%);opacity:0;} to{transform:translateX(0);opacity:1;} }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
 
 /* RESPONSIVE */
 @media(max-width:768px){
@@ -241,7 +242,12 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
         Liczniki — Zestawienie
       </div>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span id="meters-dirty-indicator" style="display:none;align-items:center;gap:6px;color:#f39c12;font-weight:600;font-size:0.9em;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f39c12;animation:pulse 1.5s infinite;"></span>
+          Niezapisane zmiany
+        </span>
+        <span id="meters-autosave-status" style="font-size:0.8em;color:#27ae60;opacity:0.5;transition:opacity 0.3s;">Auto-zapis aktywny</span>
         <button class="btn btn-primary" onclick="openMeterModal()">+ Dodaj pojedynczo</button>
         <button class="btn btn-success" onclick="saveAllMeters()">Zapisz zestawienie</button>
       </div>
@@ -682,6 +688,8 @@ function loadData() {
   catch(e){ return structuredClone(DEFAULT_DATA); }
 }
 function saveData(d){
+  // Stempel czasowy lokalny — używany do merge z chmurą (nowsza wersja wygrywa)
+  d.updatedAt = Date.now();
   localStorage.setItem(DB_KEY, JSON.stringify(d));
   // If logged in, sync to Firestore
   if(firebaseUser && db){
@@ -762,19 +770,50 @@ async function loadFromFirestore(){
       const cloudData=doc.data().appData;
       if(cloudData){
         isSyncingFromCloud=true;
-        // Merge: cloud data wins, but keep local contract PDFs (too big for Firestore)
+        // === MERGE — nowsza wersja wygrywa, lokalne dane nigdy nie giną ===
+        const localTs = DATA.updatedAt || 0;
+        const cloudTs = cloudData.updatedAt || 0;
+
+        // Zachowaj lokalne PDFy umów (zbyt duże dla Firestore)
         const localContracts={};
         DATA.tenants.forEach(t=>{if(t.contractPdf) localContracts[t.id]=t.contractPdf;});
 
-        DATA={...structuredClone(DEFAULT_DATA),...cloudData};
-        // Restore contract PDFs from local
-        DATA.tenants.forEach(t=>{
-          if(!t.contractPdf && localContracts[t.id]) t.contractPdf=localContracts[t.id];
-        });
-
-        localStorage.setItem(DB_KEY, JSON.stringify(DATA));
-        toast('Dane zsynchronizowane z chmury','success');
-        // Refresh current page
+        if(cloudTs > localTs){
+          // Chmura nowsza — używamy chmury
+          DATA={...structuredClone(DEFAULT_DATA),...cloudData};
+          DATA.tenants.forEach(t=>{
+            if(!t.contractPdf && localContracts[t.id]) t.contractPdf=localContracts[t.id];
+          });
+          localStorage.setItem(DB_KEY, JSON.stringify(DATA));
+          toast('Dane zsynchronizowane z chmury','success');
+        } else if(localTs > cloudTs){
+          // Lokalne nowsze — wypchnij do chmury (NIE nadpisuj lokalnych!)
+          isSyncingFromCloud=false;
+          syncToFirestore(DATA);
+          toast('Wysłano lokalne zmiany do chmury','success');
+          isSyncingFromCloud=true;
+        } else {
+          // Identyczne timestamp lub oba=0 — sprawdź zawartość
+          const localCmp={...DATA}; delete localCmp.updatedAt;
+          const cloudCmp={...cloudData}; delete cloudCmp.updatedAt;
+          localCmp.tenants=(localCmp.tenants||[]).map(t=>{const c={...t};delete c.contractPdf;return c;});
+          if(JSON.stringify(localCmp)!==JSON.stringify(cloudCmp)){
+            // Konflikt bez znaczników czasu — preferuj większą bazę (więcej rekordów wygrywa)
+            const localCount=(DATA.meters?.length||0)+(DATA.readings?.length||0)+(DATA.tenants?.length||0);
+            const cloudCount=(cloudData.meters?.length||0)+(cloudData.readings?.length||0)+(cloudData.tenants?.length||0);
+            if(cloudCount>localCount){
+              DATA={...structuredClone(DEFAULT_DATA),...cloudData};
+              DATA.tenants.forEach(t=>{if(!t.contractPdf && localContracts[t.id]) t.contractPdf=localContracts[t.id];});
+              localStorage.setItem(DB_KEY, JSON.stringify(DATA));
+              toast('Pobrano nowszą wersję z chmury','success');
+            } else {
+              isSyncingFromCloud=false;
+              syncToFirestore(DATA);
+              isSyncingFromCloud=true;
+            }
+          }
+        }
+        // Odśwież widoczną stronę
         const activePage=document.querySelector('.nav-tab.active');
         if(activePage) refresh(activePage.dataset.page);
         isSyncingFromCloud=false;
@@ -795,30 +834,63 @@ function syncToFirestore(d){
   if(!firebaseUser||!db||isSyncingFromCloud) return;
   // Debounce — save max every 2 seconds
   clearTimeout(syncTimeout);
-  syncTimeout=setTimeout(async()=>{
-    try{
-      // Strip contract PDFs (base64, too large for Firestore 1MB doc limit)
-      const dataToSync=JSON.parse(JSON.stringify(d));
-      dataToSync.tenants.forEach(t=>{delete t.contractPdf;});
-      // Also strip OCR thumbnails
-      if(dataToSync.ocrResults) dataToSync.ocrResults.forEach(r=>{delete r.thumb;});
-
-      await db.collection('users').doc(firebaseUser.uid).set({
-        appData:dataToSync,
-        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-        email:firebaseUser.email
-      },{merge:true});
-
-      const ind=document.getElementById('sync-indicator');
-      ind.textContent='Sync ✓';ind.style.background='#27ae60';
-      setTimeout(()=>{ind.textContent='Sync';},2000);
-    }catch(e){
-      console.error('Firestore save error:',e);
-      const ind=document.getElementById('sync-indicator');
-      ind.textContent='Sync ✗';ind.style.background='#e74c3c';
-    }
-  },2000);
+  syncTimeout=setTimeout(()=>{ doFirestoreSync(d); },2000);
 }
+
+// Wewnętrzny zapis — używany przez debounce ORAZ przez flush przy zamknięciu
+async function doFirestoreSync(d){
+  if(!firebaseUser||!db) return;
+  try{
+    const dataToSync=JSON.parse(JSON.stringify(d));
+    dataToSync.tenants.forEach(t=>{delete t.contractPdf;});
+    if(dataToSync.ocrResults) dataToSync.ocrResults.forEach(r=>{delete r.thumb;});
+
+    await db.collection('users').doc(firebaseUser.uid).set({
+      appData:dataToSync,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      email:firebaseUser.email
+    },{merge:true});
+
+    const ind=document.getElementById('sync-indicator');
+    if(ind){ ind.textContent='Sync ✓';ind.style.background='#27ae60'; setTimeout(()=>{ind.textContent='Sync';},2000); }
+  }catch(e){
+    console.error('Firestore save error:',e);
+    const ind=document.getElementById('sync-indicator');
+    if(ind){ ind.textContent='Sync ✗';ind.style.background='#e74c3c'; }
+  }
+}
+
+// === FLUSH PRZY ZAMYKANIU OKNA ===
+// Jeśli są niezapisane dane (debounce nie zdążył) — wymuś natychmiastowy zapis.
+window.addEventListener('beforeunload', (ev)=>{
+  // 1) Wymuś auto-zapis tabeli liczników jeśli są niezapisane edycje
+  if(typeof metersDirty!=='undefined' && metersDirty){
+    try{ saveAllMeters({silent:true}); }catch(e){}
+  }
+  // 2) Wymuś natychmiastową synchronizację do Firestore (bez debounce)
+  if(firebaseUser && db && syncTimeout){
+    clearTimeout(syncTimeout);
+    // sendBeacon / fire-and-forget — beforeunload nie czeka na async
+    doFirestoreSync(DATA);
+    // Pokaż ostrzeżenie tylko jeśli realnie coś nie zostało wysłane
+    ev.preventDefault();
+    ev.returnValue='Trwa zapis do chmury — poczekaj chwilę przed zamknięciem.';
+    return ev.returnValue;
+  }
+});
+
+// Dodatkowo: zapis przy ukryciu karty (mobile, przełączenie aplikacji)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='hidden'){
+    if(typeof metersDirty!=='undefined' && metersDirty){
+      try{ saveAllMeters({silent:true}); }catch(e){}
+    }
+    if(firebaseUser && db && syncTimeout){
+      clearTimeout(syncTimeout);
+      doFirestoreSync(DATA);
+    }
+  }
+});
 
 // Listen for real-time changes from other devices
 if(db){
@@ -828,7 +900,11 @@ if(db){
         if(!doc.exists||isSyncingFromCloud) return;
         const cloudData=doc.data()?.appData;
         if(!cloudData) return;
-        // Check if cloud data is newer (compare updatedAt or just always merge)
+        // === Akceptuj zmiany z innego urządzenia TYLKO jeśli są nowsze ===
+        const cloudTs=cloudData.updatedAt||0;
+        const localTs=DATA.updatedAt||0;
+        if(cloudTs<=localTs) return; // lokalne nowsze lub równe — ignoruj
+
         const cloudStr=JSON.stringify(cloudData);
         const localCopy=JSON.parse(JSON.stringify(DATA));
         localCopy.tenants.forEach(t=>{delete t.contractPdf;});
@@ -1178,9 +1254,32 @@ function renderMeterAssign(){
     h+='</tr>';
   }
   tb.innerHTML=h;
+
+  // === AUTO-ZAPIS NA BLUR + wskaźnik niezapisanych zmian ===
+  tb.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('input',()=>markMetersDirty(true));
+    inp.addEventListener('blur',()=>{
+      if(!metersDirty) return;
+      saveAllMeters({silent:true});
+    });
+  });
+  const dInp=document.getElementById('initial-reading-date');
+  if(dInp){
+    dInp.addEventListener('change',()=>{ if(metersDirty) saveAllMeters({silent:true}); });
+  }
+  markMetersDirty(false);
 }
 
-function saveAllMeters(){
+// Wskaźnik niezapisanych zmian
+let metersDirty=false;
+function markMetersDirty(dirty){
+  metersDirty=dirty;
+  const ind=document.getElementById('meters-dirty-indicator');
+  if(ind) ind.style.display=dirty?'inline-flex':'none';
+}
+
+function saveAllMeters(opts){
+  opts=opts||{};
   const serialInputs=document.querySelectorAll('.meter-assign-table input[data-field="serial"]');
   const initialInputs=document.querySelectorAll('.meter-assign-table input[data-field="initial"]');
   const initialDate=document.getElementById('initial-reading-date')?.value||today();
@@ -1226,7 +1325,14 @@ function saveAllMeters(){
   });
 
   saveData(DATA); renderMeters(); renderDashboard();
-  toast(`Zapisano ${countMeters} liczników, ${countInitial} stanów początkowych`);
+  markMetersDirty(false);
+  if(opts.silent){
+    // ciche zapisy z blur — pokazuj dyskretny status "Auto-zapis"
+    const ind=document.getElementById('meters-autosave-status');
+    if(ind){ ind.textContent='✓ Auto-zapisano '+new Date().toLocaleTimeString('pl-PL'); ind.style.opacity='1'; setTimeout(()=>{ind.style.opacity='0.5';},2000); }
+  } else {
+    toast(`Zapisano ${countMeters} liczników, ${countInitial} stanów początkowych`);
+  }
 }
 
 function renderMeters(){
