@@ -6,7 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1B4F72">
-<title>Brzozowa 77 — Zarządzanie Najmem</title>
+<!-- Wymuszenie odświeżania — bez cache, żeby zmiany od razu widoczne na wszystkich urządzeniach -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Brzozowa 77 — Zarządzanie Najmem (v.2026-06-01.4)</title>
 <link rel="manifest" href="manifest.json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -177,7 +181,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
         Zaloguj się
       </button>
       <div id="auth-status" style="font-size:0.75em;color:rgba(255,255,255,0.6);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
-      <div id="sync-indicator" style="display:none;font-size:0.7em;padding:2px 8px;border-radius:10px;background:#27ae60;color:#fff;">Sync</div>
+      <div id="sync-indicator" style="display:none;font-size:0.7em;padding:2px 8px;border-radius:10px;background:#27ae60;color:#fff;cursor:pointer;" onclick="forceSyncNow()" title="Kliknij aby wymusić synchronizację z chmurą">Sync</div>
     </div>
   </div>
 </nav>
@@ -675,10 +679,8 @@ let firebaseUser=null, db=null, syncTimeout=null, isSyncingFromCloud=false;
 try{
   firebase.initializeApp(firebaseConfig);
   db=firebase.firestore();
-  // Enable offline persistence
-  db.enablePersistence({synchronizeTabs:true}).catch(err=>{
-    console.warn('Firestore persistence:',err.code);
-  });
+  // Offline persistence WYŁĄCZONE — powodowało błędy "failed-precondition" przy wielu kartach
+  // i blokowało sync między urządzeniami. Aplikacja działa online; localStorage daje fallback offline.
 }catch(e){console.warn('Firebase init error:',e);}
 
 function handleAuth(){
@@ -717,6 +719,48 @@ firebase.auth().onAuthStateChanged(user=>{
     syncInd.style.display='none';
   }
 });
+
+// Ręczna synchronizacja — kliknięcie na wskaźnik "Sync"
+async function forceSyncNow(){
+  if(!firebaseUser||!db){ toast('Najpierw się zaloguj','warn'); return; }
+  const ind=document.getElementById('sync-indicator');
+  if(ind){ ind.textContent='Sync ⟳';ind.style.background='#f39c12'; }
+  try{
+    // Najpierw upload aktualnych danych lokalnych
+    const dataToSync=JSON.parse(JSON.stringify(DATA));
+    dataToSync.tenants.forEach(t=>{delete t.contractPdf;});
+    await db.collection('users').doc(firebaseUser.uid).set({
+      appData:dataToSync,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      email:firebaseUser.email
+    },{merge:true});
+    // Potem świeży download z serwera (omijając cache)
+    const doc=await db.collection('users').doc(firebaseUser.uid).get({source:'server'});
+    if(doc.exists){
+      const cloudData=doc.data().appData;
+      if(cloudData){
+        isSyncingFromCloud=true;
+        const localContracts={};
+        DATA.tenants.forEach(t=>{if(t.contractPdf) localContracts[t.id]=t.contractPdf;});
+        DATA={...structuredClone(DEFAULT_DATA),...cloudData};
+        DATA.tenants.forEach(t=>{ if(!t.contractPdf && localContracts[t.id]) t.contractPdf=localContracts[t.id]; });
+        localStorage.setItem(DB_KEY, JSON.stringify(DATA));
+        const activePage=document.querySelector('.nav-tab.active');
+        if(activePage) refresh(activePage.dataset.page);
+        isSyncingFromCloud=false;
+      }
+    }
+    if(ind){ ind.textContent='Sync ✓';ind.style.background='#27ae60';
+      setTimeout(()=>{ind.textContent='Sync';},2000); }
+    toast('✓ Synchronizacja zakończona','success');
+  }catch(e){
+    console.error('forceSyncNow error:',e.code,e.message,e);
+    if(ind){ ind.textContent='Sync ✗';ind.style.background='#e74c3c'; }
+    let msg='Błąd synchronizacji: '+e.message;
+    if(e.code==='permission-denied') msg='Brak uprawnień Firestore — w Firebase Console włącz reguły bezpieczeństwa dla użytkowników (allow read, write: if request.auth.uid == userId)';
+    toast(msg,'error');
+  }
+}
 
 let loadCloudRetryCount=0;
 async function loadFromFirestore(){
@@ -800,14 +844,18 @@ function syncToFirestore(d){
 }
 
 // Listen for real-time changes from other devices
+let snapshotUnsubscribe=null;
 if(db){
   firebase.auth().onAuthStateChanged(user=>{
-    if(user){
-      db.collection('users').doc(user.uid).onSnapshot(doc=>{
+    // Odepnij poprzedni listener jeśli istnieje
+    if(snapshotUnsubscribe){ try{snapshotUnsubscribe();}catch(e){} snapshotUnsubscribe=null; }
+    if(!user) return;
+    snapshotUnsubscribe = db.collection('users').doc(user.uid).onSnapshot(
+      doc=>{
         if(!doc.exists||isSyncingFromCloud) return;
         const cloudData=doc.data()?.appData;
         if(!cloudData) return;
-        // Check if cloud data is newer (compare updatedAt or just always merge)
+        // Check if cloud data is newer (compare content)
         const cloudStr=JSON.stringify(cloudData);
         const localCopy=JSON.parse(JSON.stringify(DATA));
         localCopy.tenants.forEach(t=>{delete t.contractPdf;});
@@ -827,11 +875,22 @@ if(db){
         if(activePage) refresh(activePage.dataset.page);
 
         const ind=document.getElementById('sync-indicator');
-        ind.textContent='Sync ↓';ind.style.background='#2e86c1';
-        setTimeout(()=>{ind.textContent='Sync';ind.style.background='#27ae60';},2000);
+        if(ind){ ind.textContent='Sync ↓';ind.style.background='#2e86c1';
+          setTimeout(()=>{ind.textContent='Sync';ind.style.background='#27ae60';},2000); }
         isSyncingFromCloud=false;
-      });
-    }
+        toast('Otrzymano nowe dane z innego urządzenia','info');
+      },
+      err=>{
+        // Error handler — kluczowy! Bez niego cichy błąd uniemożliwia sync między urządzeniami
+        console.error('Firestore onSnapshot error:',err.code,err.message,err);
+        const ind=document.getElementById('sync-indicator');
+        if(ind){ ind.textContent='Sync ✗';ind.style.background='#e74c3c'; }
+        let msg='Synchronizacja real-time niedostępna';
+        if(err.code==='permission-denied') msg='Brak uprawnień Firestore — sprawdź reguły bezpieczeństwa';
+        else if(err.code==='unauthenticated') msg='Sesja wygasła — zaloguj się ponownie';
+        toast(msg,'error');
+      }
+    );
   });
 }
 
