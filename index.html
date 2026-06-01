@@ -295,6 +295,10 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <strong>🛠 Korekta globalna:</strong> Jeśli WSZYSTKIE odczyty w aplikacji są przesunięte o jeden miesiąc do przodu (np. dane majowe figurują jako kwiecień), kliknij:
       <button class="btn btn-sm btn-danger" onclick="shiftAllPeriodsByOneBack()" style="margin-left:8px">⏪ Przesuń WSZYSTKIE odczyty o miesiąc wstecz</button>
     </div>
+    <div style="background:#d4edda;border-left:4px solid #28a745;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:0.9em">
+      <strong>♻️ Odtwarzanie z historii:</strong> Jeśli odczytów brakuje w tabeli, ale rozliczenia ich miesięcy są w zakładce <em>Rozliczenia → Historia rozliczeń</em> — można odtworzyć je automatycznie. Każdy odczyt zostanie utworzony jako zamknięty (🔒) z dokładnymi wartościami z rozliczenia:
+      <button class="btn btn-sm" style="margin-left:8px;background:#28a745;color:white;border:none" onclick="restoreReadingsFromSettlements()">♻️ Odtwórz odczyty z historii rozliczeń</button>
+    </div>
     <div class="card">
       <div class="table-wrap">
         <table><thead><tr><th>Okres rozl.</th><th>Data odczytu</th><th>Mieszkanie</th><th>Medium</th><th>Nr licznika</th><th>Odczyt poprz.</th><th>Odczyt akt.</th><th>Zużycie</th><th>Koszt</th><th>Źródło</th><th>Status</th><th>Akcje</th></tr></thead>
@@ -1357,6 +1361,53 @@ function deleteReading(id){
   if(r&&r.locked){return tryDeleteLockedReading(id);}
   if(!confirm('Usunąć ten odczyt?'))return;
   DATA.readings=DATA.readings.filter(r=>r.id!==id);saveData(DATA);renderReadings();toast('Usunięto');
+}
+
+function restoreReadingsFromSettlements(){
+  if(!DATA.settlements||!DATA.settlements.length){ toast('Brak rozliczeń w historii','warn'); return; }
+  let created=0, skippedExisting=0, skippedNoMeter=0;
+  const log=[];
+
+  // Sortuj rozliczenia chronologicznie (najstarsze najpierw) — żeby kolejne odczyty miały spójne previousValue
+  const sorted = [...DATA.settlements].sort((a,b)=> (a.month||'').localeCompare(b.month||''));
+
+  sorted.forEach(s=>{
+    const period = s.month; if(!period) return;
+    const lastDay = lastDayOfMonth(period);
+    (s.mediaItems||[]).forEach(item=>{
+      // Znajdź licznik po (mieszkanie, typ medium)
+      const meter = DATA.meters.find(m=>m.apartment===s.apartment && m.type===item.type);
+      if(!meter){ skippedNoMeter++; log.push(`✗ M${s.apartment} ${item.type} ${period}: brak licznika`); return; }
+      // Sprawdź czy już istnieje odczyt dla tego okresu i licznika
+      const existing = DATA.readings.find(r=>r.meterId===meter.id && r.period===period && r.source!=='initial');
+      if(existing){ skippedExisting++; return; }
+      // Data odczytu: jeśli currDate sensowne — użyj go, inaczej ostatni dzień period
+      let useDate = lastDay;
+      if(item.currDate && /^\d{4}-\d{2}-\d{2}$/.test(item.currDate) && item.currDate!=='(brak)') useDate = item.currDate;
+      DATA.readings.push({
+        id: genId(),
+        meterId: meter.id,
+        date: useDate,
+        value: item.currValue,
+        previousValue: item.prevValue,
+        source: 'monthly',
+        period: period,
+        locked: true,
+        lockedAt: new Date().toISOString(),
+        restoredFromSettlement: s.id||null
+      });
+      created++;
+      log.push(`✓ M${s.apartment} ${ML[item.type]} ${period}: ${item.prevValue} → ${item.currValue}`);
+    });
+  });
+
+  if(!created){ toast(`Brak nowych odczytów do utworzenia (istniejące: ${skippedExisting}, bez licznika: ${skippedNoMeter})`,'info'); return; }
+  saveData(DATA); renderReadings(); renderDashboard();
+  let msg = `✓ Utworzono ${created} odczytów`;
+  if(skippedExisting) msg += `, pominięto ${skippedExisting} istniejących`;
+  if(skippedNoMeter) msg += `, ${skippedNoMeter} bez licznika`;
+  toast(msg,'success');
+  console.log('[restoreReadingsFromSettlements]\n'+log.join('\n'));
 }
 
 function shiftAllPeriodsByOneBack(){
