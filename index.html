@@ -166,7 +166,6 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
     <div class="nav-tabs">
       <div class="nav-tab active" data-page="dashboard">Dashboard</div>
       <div class="nav-tab" data-page="tenants">Najemcy</div>
-      <div class="nav-tab" data-page="meters">Liczniki</div>
       <div class="nav-tab" data-page="readings">Odczyty</div>
       <div class="nav-tab" data-page="invoices">Faktury</div>
       <div class="nav-tab" data-page="settlements">Rozliczenia</div>
@@ -210,60 +209,6 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="table-wrap">
         <table><thead><tr><th>Mieszkanie</th><th>Najemca (osoba 1)</th><th>Osoby</th><th>E-mail</th><th>Telefon</th><th>Osoba 2</th><th>Czynsz</th><th>Umowa do</th><th>Umowa PDF</th><th>Akcje</th></tr></thead>
         <tbody id="tenants-tbody"></tbody></table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════ LICZNIKI ══════════ -->
-  <div class="page" id="page-meters">
-    <div class="card-header">
-      <div class="section-title" style="margin-bottom:0">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-        Liczniki — Zestawienie
-      </div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-primary" onclick="openMeterModal()">+ Dodaj pojedynczo</button>
-        <button class="btn btn-success" onclick="saveAllMeters()">Zapisz zestawienie</button>
-      </div>
-    </div>
-
-    <!-- ZESTAWIENIE DO WPISU NUMEROW LICZNIKOW + STANY POCZATKOWE -->
-    <div class="card">
-      <div class="card-title" style="margin-bottom:8px">Zestawienie liczników — numery seryjne + stany początkowe</div>
-      <p style="color:var(--text-light);font-size:0.85em;margin-bottom:4px;">Dla każdego mieszkania wpisz <strong>nr seryjny</strong> licznika oraz <strong>stan początkowy</strong> (aktualny odczyt z którego zaczyna się rozliczanie).</p>
-      <p style="color:var(--text-light);font-size:0.85em;margin-bottom:16px;">Np. jeśli 1 kwietnia spisałeś licznik zimnej wody i było 152,80 m³ — wpisz tę wartość. Gdy 1 maja zrobisz zdjęcie z odczytem 160,30 m³, system policzy zużycie: 160,30 - 152,80 = 7,50 m³.</p>
-      <div class="table-wrap">
-        <table class="meter-assign-table">
-          <thead>
-            <tr>
-              <th style="width:70px" rowspan="2">Mieszkanie</th>
-              <th colspan="2" style="text-align:center;border-bottom:2px solid rgba(255,255,255,0.3)">💧 Zimna woda</th>
-              <th colspan="2" style="text-align:center;border-bottom:2px solid rgba(255,255,255,0.3)">🔥 Ciepła woda</th>
-              <th colspan="2" style="text-align:center;border-bottom:2px solid rgba(255,255,255,0.3)">🌡️ Ogrzewanie</th>
-              <th colspan="2" style="text-align:center;border-bottom:2px solid rgba(255,255,255,0.3)">⚡ Energia</th>
-            </tr>
-            <tr>
-              <th style="font-weight:400;font-size:0.85em">Nr seryjny</th><th style="font-weight:400;font-size:0.85em">Stan (m³)</th>
-              <th style="font-weight:400;font-size:0.85em">Nr seryjny</th><th style="font-weight:400;font-size:0.85em">Stan (m³)</th>
-              <th style="font-weight:400;font-size:0.85em">Nr seryjny</th><th style="font-weight:400;font-size:0.85em">Stan (GJ)</th>
-              <th style="font-weight:400;font-size:0.85em">Nr seryjny</th><th style="font-weight:400;font-size:0.85em">Stan (kWh)</th>
-            </tr>
-          </thead>
-          <tbody id="meter-assign-tbody"></tbody>
-        </table>
-      </div>
-      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
-        <label class="form-label" style="margin:0;">Data stanu początkowego:</label>
-        <input type="date" class="form-input" id="initial-reading-date" style="width:180px;" value="">
-      </div>
-    </div>
-
-    <!-- LISTA ZAPISANYCH LICZNIKOW -->
-    <div class="card">
-      <div class="card-title" style="margin-bottom:12px">Zapisane liczniki</div>
-      <div class="table-wrap">
-        <table><thead><tr><th>Mieszkanie</th><th>Typ medium</th><th>Nr seryjny</th><th>Jednostka</th><th>Ostatni odczyt</th><th>Legalizacja do</th><th>Akcje</th></tr></thead>
-        <tbody id="meters-tbody"></tbody></table>
       </div>
     </div>
   </div>
@@ -679,6 +624,22 @@ function loadData() {
     (data.readings||[]).forEach(r=>{
       if(!r.period && r.date && r.source!=='initial'){ r.period = r.date.substring(0,7); }
     });
+    // Migracja rozliczeń: napraw NaN/undefined w polach kwotowych. Jeśli czynsz=NaN, podstaw
+    // wartość z aktualnego najemcy danego lokalu (jeśli możliwe).
+    (data.settlements||[]).forEach(s=>{
+      const numOrZero=v=>{ const n=Number(v); return isFinite(n)?n:0; };
+      // Jeśli rent puste/NaN → spróbuj odzyskać z aktualnego najemcy
+      if(!isFinite(Number(s.rent))){
+        const tenant=(data.tenants||[]).find(t=>t.apartment===s.apartment);
+        s.rent = tenant && isFinite(Number(tenant.rent)) ? Number(tenant.rent) : 0;
+      } else {
+        s.rent = Number(s.rent);
+      }
+      s.totalMedia = numOrZero(s.totalMedia);
+      s.garbageCost = numOrZero(s.garbageCost);
+      // Przelicz totalAll na podstawie poprawnych wartości
+      s.totalAll = Math.round((s.rent + s.totalMedia)*100)/100;
+    });
     return data;
   }
   catch(e){ return structuredClone(DEFAULT_DATA); }
@@ -861,7 +822,7 @@ const MU = { cold_water:'m³', hot_water:'m³', heating:'GJ', electricity:'kWh' 
 const MI = { cold_water:'💧', hot_water:'🔥', heating:'🌡️', electricity:'⚡' };
 const MTYPES = ['cold_water','hot_water','heating','electricity'];
 
-function fmt(n){ return Number(n).toFixed(2).replace('.',',')+' zł'; }
+function fmt(n){ const v=Number(n); return (isFinite(v)?v:0).toFixed(2).replace('.',',')+' zł'; }
 function fmtN(n){ return Number(n).toFixed(2).replace('.',','); }
 function genId(){ return Date.now().toString(36)+Math.random().toString(36).substr(2,5); }
 function today(){ return new Date().toISOString().split('T')[0]; }
@@ -927,7 +888,6 @@ function refresh(p){
   switch(p){
     case 'dashboard': renderDashboard(); break;
     case 'tenants': renderTenants(); break;
-    case 'meters': renderMeterAssign(); renderMeters(); break;
     case 'readings': renderReadings(); break;
     case 'invoices': renderInvoices(); break;
     case 'settlements': initSettlements(); break;
@@ -975,13 +935,21 @@ function goToApt(n){ getTenant(n)?switchPage('readings'):openTenantModal(null,n)
 // ═══════════════════════════════════════════════════════════════
 function renderTenants(){
   const tb=document.getElementById('tenants-tbody');
-  if(!DATA.tenants.length){ tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-light)">Brak najemców.</td></tr>'; return; }
-  tb.innerHTML=DATA.tenants.map(t=>{
+  // Zawsze pokazujemy 8 wierszy posortowanych M1-M8. Puste = wiersz z myślnikami i przyciskiem dodawania.
+  tb.innerHTML=[1,2,3,4,5,6,7,8].map(apt=>{
+    const t=DATA.tenants.find(x=>x.apartment===apt);
+    if(!t){
+      return `<tr style="color:var(--text-light)">
+        <td><strong>M${apt}</strong></td>
+        <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+        <td><button class="btn btn-sm btn-outline" onclick="openTenantModal(null,${apt})">+ Dodaj</button></td>
+      </tr>`;
+    }
     const extras=t.extraPersons||[];
     const allPersons=extras.length?extras.map(p=>`<span title="E-mail: ${p.email||'—'}\nTel: ${p.phone||'—'}" style="cursor:help">${p.name}</span>`).join(', '):(t.person2Name?`<span title="E-mail: ${t.person2Email||'—'}\nTel: ${t.person2Phone||'—'}" style="cursor:help">${t.person2Name}</span>`:'—');
     const contractBtn=t.contractPdf?`<button class="btn btn-sm btn-outline" onclick="viewTenantContract('${t.id}')">📄 Podgląd</button>`:'<span style="color:var(--text-light)">—</span>';
     return `<tr>
-    <td><strong>M${t.apartment}</strong></td><td>${t.name}</td><td>${t.persons||1}</td><td>${t.email||'—'}</td><td>${t.phone||'—'}</td><td>${allPersons}</td><td>${fmt(t.rent)}</td><td>${t.contractTo||'—'}</td>
+    <td><strong>M${t.apartment}</strong></td><td>${t.name||'—'}</td><td>${t.persons||1}</td><td>${t.email||'—'}</td><td>${t.phone||'—'}</td><td>${allPersons}</td><td>${fmt(t.rent)}</td><td>${t.contractTo||'—'}</td>
     <td>${contractBtn}</td>
     <td><button class="btn btn-sm btn-outline" onclick="editTenant('${t.id}')">Edytuj</button> <button class="btn btn-sm btn-danger" onclick="deleteTenant('${t.id}')">Usuń</button></td>
   </tr>`;}).join('');
@@ -1147,6 +1115,7 @@ function deleteTenant(id){if(!confirm('Usunąć najemcę?'))return;DATA.tenants=
 // ═══════════════════════════════════════════════════════════════
 function renderMeterAssign(){
   const tb=document.getElementById('meter-assign-tbody');
+  if(!tb) return; // Zakładka Liczniki usunięta — funkcja nieaktywna
   // Set default initial reading date if empty
   const dateInput=document.getElementById('initial-reading-date');
   if(dateInput&&!dateInput.value){
@@ -1220,6 +1189,7 @@ function saveAllMeters(){
 
 function renderMeters(){
   const tb=document.getElementById('meters-tbody');
+  if(!tb) return; // Zakładka Liczniki usunięta — funkcja nieaktywna
   if(!DATA.meters.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-light)">Brak zapisanych liczników.</td></tr>';return;}
   const sorted=[...DATA.meters].sort((a,b)=>a.apartment-b.apartment||MTYPES.indexOf(a.type)-MTYPES.indexOf(b.type));
   tb.innerHTML=sorted.map(m=>{
@@ -2048,9 +2018,9 @@ function renderSettlementHistory(){
   });
 
   container.innerHTML=Object.entries(grouped).map(([month, group])=>{
-    const totalAll=group.items.reduce((sum,s)=>sum+s.totalAll,0);
-    const totalMedia=group.items.reduce((sum,s)=>sum+s.totalMedia,0);
-    const totalRent=group.items.reduce((sum,s)=>sum+s.rent,0);
+    const totalAll=group.items.reduce((sum,s)=>sum+(Number(s.totalAll)||0),0);
+    const totalMedia=group.items.reduce((sum,s)=>sum+(Number(s.totalMedia)||0),0);
+    const totalRent=group.items.reduce((sum,s)=>sum+(Number(s.rent)||0),0);
 
     const rows=group.items.map(s=>`
       <tr style="cursor:pointer;" onclick="viewSettlement('${s.id}')">
