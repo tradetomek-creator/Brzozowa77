@@ -291,6 +291,10 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <span id="bulk-move-info"></span>
       <button class="btn btn-sm btn-primary" onclick="bulkMovePeriod()" style="margin-left:12px">↔ Przesuń wszystkie widoczne do innego okresu</button>
     </div>
+    <div style="background:#f8d7da;border-left:4px solid #dc3545;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:0.9em">
+      <strong>🛠 Korekta globalna:</strong> Jeśli WSZYSTKIE odczyty w aplikacji są przesunięte o jeden miesiąc do przodu (np. dane majowe figurują jako kwiecień), kliknij:
+      <button class="btn btn-sm btn-danger" onclick="shiftAllPeriodsByOneBack()" style="margin-left:8px">⏪ Przesuń WSZYSTKIE odczyty o miesiąc wstecz</button>
+    </div>
     <div class="card">
       <div class="table-wrap">
         <table><thead><tr><th>Okres rozl.</th><th>Data odczytu</th><th>Mieszkanie</th><th>Medium</th><th>Nr licznika</th><th>Odczyt poprz.</th><th>Odczyt akt.</th><th>Zużycie</th><th>Koszt</th><th>Źródło</th><th>Status</th><th>Akcje</th></tr></thead>
@@ -1353,6 +1357,45 @@ function deleteReading(id){
   if(r&&r.locked){return tryDeleteLockedReading(id);}
   if(!confirm('Usunąć ten odczyt?'))return;
   DATA.readings=DATA.readings.filter(r=>r.id!==id);saveData(DATA);renderReadings();toast('Usunięto');
+}
+
+function shiftAllPeriodsByOneBack(){
+  const movable = DATA.readings.filter(r=>r.source!=='initial' && !r.locked);
+  const lockedCount = DATA.readings.filter(r=>r.locked).length;
+  if(!movable.length){ toast('Brak niezablokowanych odczytów do przesunięcia','warn'); return; }
+
+  // Pokaż mapę: ile odczytów per okres → docelowy okres
+  const buckets = {};
+  movable.forEach(r=>{
+    const cur = r.period || (r.date?r.date.substring(0,7):'');
+    if(!cur) return;
+    const next = prevMonth(cur);
+    const k = `${cur} → ${next}`;
+    buckets[k] = (buckets[k]||0) + 1;
+  });
+  const summary = Object.entries(buckets).sort().map(([k,v])=>`  • ${k}  (${v} szt.)`).join('\n');
+  let msg = `Przesunąć WSZYSTKIE niezablokowane odczyty o JEDEN MIESIĄC WSTECZ?\n\n${summary}\n\nRazem: ${movable.length} odczytów.\nDaty odczytów (date) ZOSTANĄ NIEZMIENIONE — zmieni się tylko miesiąc rozliczeniowy (period).`;
+  if(lockedCount>0) msg += `\n\nUWAGA: ${lockedCount} zablokowanych odczytów ZOSTANIE POMINIĘTYCH.`;
+  if(!confirm(msg)) return;
+
+  let cnt = 0;
+  movable.forEach(r=>{
+    const cur = r.period || (r.date?r.date.substring(0,7):'');
+    if(!cur) return;
+    r.period = prevMonth(cur);
+    cnt++;
+  });
+  saveData(DATA);
+
+  // Przełącz filtr na poprzedni miesiąc względem obecnego, żeby Tomasz widział efekt
+  const sel = document.getElementById('reading-month-filter');
+  const newFilter = prevMonth(sel.value);
+  if(![...sel.options].some(o=>o.value===newFilter)){
+    const opt = document.createElement('option'); opt.value=newFilter; opt.textContent=newFilter; sel.appendChild(opt);
+  }
+  sel.value = newFilter;
+  renderReadings(); renderDashboard();
+  toast(`✓ Przesunięto ${cnt} odczytów o miesiąc wstecz`,'success');
 }
 
 function bulkMovePeriod(){
