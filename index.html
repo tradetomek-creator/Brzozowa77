@@ -324,6 +324,7 @@ select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="card-header">
         <div class="card-title">Historia rozliczeń</div>
         <div class="form-row" style="margin-bottom:0;gap:8px;">
+          <button class="btn btn-sm btn-outline" onclick="recalcSettlementRents()" title="Podstawia czynsze z zakładki Najemcy do wszystkich zapisanych rozliczeń">🔄 Przelicz czynsze z najemców</button>
           <select class="form-input" id="settle-hist-apt" onchange="renderSettlementHistory()" style="width:auto;">
             <option value="all">Wszystkie lokale</option>
             <option value="1">M1</option><option value="2">M2</option><option value="3">M3</option><option value="4">M4</option>
@@ -624,14 +625,17 @@ function loadData() {
     (data.readings||[]).forEach(r=>{
       if(!r.period && r.date && r.source!=='initial'){ r.period = r.date.substring(0,7); }
     });
-    // Migracja rozliczeń: napraw NaN/undefined w polach kwotowych. Jeśli czynsz=NaN, podstaw
-    // wartość z aktualnego najemcy danego lokalu (jeśli możliwe).
+    // Migracja rozliczeń: napraw NaN/0 w polach kwotowych. Jeśli czynsz brakuje lub jest zerowy,
+    // a aktualny najemca danego lokalu ma wpisaną stawkę >0 → podstaw z najemcy.
     (data.settlements||[]).forEach(s=>{
       const numOrZero=v=>{ const n=Number(v); return isFinite(n)?n:0; };
-      // Jeśli rent puste/NaN → spróbuj odzyskać z aktualnego najemcy
-      if(!isFinite(Number(s.rent))){
+      const currentRent = Number(s.rent);
+      const needsRentFix = !isFinite(currentRent) || currentRent === 0;
+      if(needsRentFix){
         const tenant=(data.tenants||[]).find(t=>t.apartment===s.apartment);
-        s.rent = tenant && isFinite(Number(tenant.rent)) ? Number(tenant.rent) : 0;
+        const tenantRent = tenant && isFinite(Number(tenant.rent)) ? Number(tenant.rent) : 0;
+        // Jeśli najemca ma stawkę >0, podstaw ją (puste lokale zostają z 0)
+        s.rent = tenantRent > 0 ? tenantRent : (isFinite(currentRent)?currentRent:0);
       } else {
         s.rent = Number(s.rent);
       }
@@ -2009,6 +2013,43 @@ function saveSettlement(){
   settlePreviewData=[];
   renderSettlementHistory();
   toast(`Zapisano rozliczenie za ${month}`);
+}
+
+function recalcSettlementRents(){
+  if(!DATA.settlements||!DATA.settlements.length){ toast('Brak rozliczeń w historii','warn'); return; }
+  // Mapa apartment → rent z aktualnego najemcy
+  const rentMap={};
+  (DATA.tenants||[]).forEach(t=>{ if(isFinite(Number(t.rent))) rentMap[t.apartment]=Number(t.rent); });
+
+  // Zbuduj podsumowanie zmian
+  const changes=[];
+  DATA.settlements.forEach(s=>{
+    const oldRent=Number(s.rent)||0;
+    const newRent=rentMap[s.apartment];
+    if(newRent===undefined) return;
+    if(Math.abs(oldRent-newRent)>0.001){
+      changes.push({apt:s.apartment, month:s.month, old:oldRent, new:newRent});
+    }
+  });
+  if(!changes.length){ toast('Wszystkie czynsze są już zgodne z najemcami','info'); return; }
+
+  // Podsumowanie pierwszych 10
+  const sample = changes.slice(0,10).map(c=>`  • M${c.apt} ${c.month}: ${c.old.toFixed(2)} → ${c.new.toFixed(2)} zł`).join('\n');
+  const extra = changes.length>10 ? `\n  ...i ${changes.length-10} kolejnych` : '';
+  if(!confirm(`Podstawić czynsze z zakładki Najemcy do ${changes.length} rozliczeń?\n\nUWAGA: NADPISZE zapisane stawki — jeśli najemca w którymś okresie miał inny czynsz, ta korekta zniszczy dane historyczne.\n\nPrzykład zmian:\n${sample}${extra}`)) return;
+
+  let cnt=0;
+  DATA.settlements.forEach(s=>{
+    const newRent=rentMap[s.apartment];
+    if(newRent===undefined) return;
+    if(Math.abs((Number(s.rent)||0)-newRent)>0.001){
+      s.rent=newRent;
+      s.totalAll=Math.round((newRent+(Number(s.totalMedia)||0))*100)/100;
+      cnt++;
+    }
+  });
+  saveData(DATA); renderSettlementHistory();
+  toast(`✓ Przeliczono czynsz w ${cnt} rozliczeniach`,'success');
 }
 
 function renderSettlementHistory(){
