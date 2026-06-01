@@ -714,10 +714,13 @@ firebase.auth().onAuthStateChanged(user=>{
   }
 });
 
+let loadCloudRetryCount=0;
 async function loadFromFirestore(){
   if(!firebaseUser||!db) return;
   try{
+    // Source: cache jeśli offline, inaczej server (najlepiej świeży)
     const doc=await db.collection('users').doc(firebaseUser.uid).get();
+    loadCloudRetryCount=0; // sukces — zresetuj licznik
     if(doc.exists){
       const cloudData=doc.data().appData;
       if(cloudData){
@@ -745,9 +748,23 @@ async function loadFromFirestore(){
       toast('Dane przesłane do chmury','success');
     }
   }catch(e){
-    console.error('Firestore load error:',e);
-    toast('Błąd ładowania z chmury — używam danych lokalnych','error');
+    console.error('Firestore load error:',e.code,e.message,e);
     isSyncingFromCloud=false;
+    loadCloudRetryCount++;
+    // Auto-retry przy błędach przejściowych (sieć, niedostępność)
+    const retryableCodes=['unavailable','deadline-exceeded','internal','cancelled','aborted'];
+    if(retryableCodes.includes(e.code) && loadCloudRetryCount<3){
+      const delay=loadCloudRetryCount*2000;
+      console.log(`Retry ładowania z chmury za ${delay}ms (próba ${loadCloudRetryCount}/3)`);
+      setTimeout(()=>loadFromFirestore(), delay);
+      return; // nie pokazuj błędu — próbujemy ponownie
+    }
+    // Komunikat z kodem błędu — bardziej diagnostyczny
+    let msg='Praca offline — używam danych lokalnych';
+    if(e.code==='permission-denied') msg='Brak uprawnień do chmury — sprawdź reguły Firestore';
+    else if(e.code==='unauthenticated') msg='Sesja wygasła — zaloguj się ponownie';
+    else if(e.code==='unavailable') msg='Chmura niedostępna — pracujesz offline';
+    toast(msg,'warn');
   }
 }
 
